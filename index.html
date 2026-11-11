@@ -10,7 +10,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Máy Chiếu">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   /* Toàn màn hình là sân khấu hình ảnh; thanh công cụ nổi ở đáy, bảng cài đặt bật lên phía trên. */
   :root {
@@ -137,12 +138,31 @@
   <div class="row">
     <label for="resSelect">Độ phân giải yêu cầu</label>
     <select id="resSelect">
-      <option value="4096x2160">Cao nhất có thể (4K)</option>
+      <option value="auto">Tự động theo máy (khuyên dùng)</option>
+      <option value="3840x2160">Cao nhất có thể (4K)</option>
       <option value="2560x1440">2K – 1440p</option>
       <option value="1920x1080">Full HD – 1080p</option>
       <option value="1280x720">HD – 720p (máy yếu)</option>
     </select>
     <p class="note" id="resNote"></p>
+  </div>
+  <div class="row">
+    <label for="fpsSelect">Số khung hình / giây (FPS)</label>
+    <select id="fpsSelect">
+      <option value="30">30 fps – mượt, vừa sức (khuyên dùng)</option>
+      <option value="24">24 fps – mát máy hơn</option>
+      <option value="15">15 fps – ít nóng nhất, tiết kiệm pin</option>
+      <option value="60">60 fps – mượt nhất, máy nóng hơn</option>
+    </select>
+    <p class="note">Chiếu bài viết, trang sách thì 24–30 fps là đủ mượt. Giảm FPS hoặc độ phân giải nếu camera, điện thoại bị nóng.</p>
+  </div>
+
+  <h2>Khung hình trên TV</h2>
+  <div class="row">
+    <div class="seg">
+      <button type="button" id="fitContain">Vừa màn hình (đủ trang)</button>
+      <button type="button" id="fitCover">Lấp đầy (không viền đen)</button>
+    </div>
   </div>
 
   <h2>Lấy nét</h2>
@@ -186,6 +206,7 @@
     <kbd>M</kbd><span>Lật gương</span>
     <kbd>+ / −</kbd><span>Phóng to / thu nhỏ (hoặc cuộn chuột)</span>
     <kbd>0</kbd><span>Về khung hình gốc</span>
+    <kbd>L</kbd><span>Vừa màn hình / lấp đầy</span>
     <kbd>S</kbd><span>Chụp ảnh lưu về máy</span>
   </div>
 </div>
@@ -219,6 +240,10 @@
     <svg viewBox="0 0 24 24" id="freezeIcon"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
     <span class="lbl hide-sm" id="freezeLbl">Đóng băng</span>
   </button>
+  <button class="tb" id="fitBtn" title="Vừa màn hình / Lấp đầy (L)" aria-label="Vừa hoặc lấp đầy màn hình">
+    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="7" y="8" width="10" height="8" rx="1"/></svg>
+    <span class="lbl hide-sm" id="fitLbl">Vừa</span>
+  </button>
   <button class="tb" id="snapBtn" title="Chụp ảnh lưu về máy (S)" aria-label="Chụp ảnh">
     <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
   </button>
@@ -251,7 +276,10 @@
   const state = {
     stream: null, track: null, caps: {},
     deviceId: store.get("deviceId", ""),
-    res: store.get("res", "4096x2160"),
+    res: store.get("res2", "auto"),
+    fps: store.get("fps", 30),
+    fit: store.get("fit", "contain"),
+    realFps: 0,
     rotation: store.get("rotation", 0),
     mirror: store.get("mirror", false),
     flipV: store.get("flipV", false),
@@ -284,8 +312,8 @@
     }
     showMsg("Đang mở camera…", "Hãy bấm <b>Cho phép</b> khi trình duyệt hỏi quyền dùng camera.", false);
     stopStream();
-    const [w, h] = state.res.split("x").map(Number);
-    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } };
+    const [w, h] = resolveRes().split("x").map(Number);
+    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps } };
     const tries = [];
     if (state.deviceId) tries.push({ video: { ...base, deviceId: { exact: state.deviceId } }, audio: false });
     tries.push({ video: { ...base, facingMode: { ideal: "environment" } }, audio: false });
@@ -342,8 +370,35 @@
     navigator.mediaDevices.addEventListener("devicechange", () => { listCameras(); });
 
   $("camSelect").onchange = (e) => { state.deviceId = e.target.value; store.set("deviceId", state.deviceId); resetView(); startCamera(); };
+  // Tự động: điện thoại/máy tính bảng dùng 1080p cho mát máy, máy tính dùng 4K nếu camera có
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  function resolveRes() { return state.res === "auto" ? (isMobile ? "1920x1080" : "3840x2160") : state.res; }
+
   $("resSelect").value = state.res;
-  $("resSelect").onchange = (e) => { state.res = e.target.value; store.set("res", state.res); startCamera(); };
+  $("resSelect").onchange = (e) => { state.res = e.target.value; store.set("res2", state.res); startCamera(); };
+  $("fpsSelect").value = String(state.fps);
+  $("fpsSelect").onchange = async (e) => {
+    state.fps = Number(e.target.value); store.set("fps", state.fps);
+    try { await state.track.applyConstraints({ frameRate: { ideal: state.fps, max: state.fps } }); updateInfo(); toast(state.fps + " fps"); }
+    catch { startCamera(); }
+  };
+
+  // Đo FPS thực tế camera đang gửi
+  (function measureFps() {
+    let n = 0, t0 = performance.now();
+    const tick = () => {
+      n++;
+      const t = performance.now();
+      if (t - t0 >= 1000) { state.realFps = Math.round(n * 1000 / (t - t0)); n = 0; t0 = t; updateInfo(); }
+      schedule();
+    };
+    const schedule = () => {
+      if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(tick);
+      else setTimeout(() => { if (!video.paused) tick(); else schedule(); }, 1000 / 30);
+    };
+    schedule();
+  })();
 
   function readCaps() {
     state.caps = (state.track && state.track.getCapabilities) ? state.track.getCapabilities() : {};
@@ -399,7 +454,8 @@
     const lbl = state.track ? state.track.label : "";
     $("camBadge").innerHTML = "<b></b>"; $("camBadge").firstChild.textContent = lbl || "Camera";
     const s = state.track && state.track.getSettings ? state.track.getSettings() : {};
-    const fps = s.frameRate ? " · " + Math.round(s.frameRate) + " fps" : "";
+    const f = state.frozen ? 0 : (state.realFps || (s.frameRate ? Math.round(s.frameRate) : 0));
+    const fps = f ? " · " + f + " fps" : "";
     $("resBadge").textContent = state.srcW + "×" + state.srcH + fps; $("resBadge").hidden = false;
   }
   video.addEventListener("resize", () => { updateInfo(); layout(); });
@@ -408,8 +464,20 @@
   function fitScale() {
     const rot90 = state.rotation % 180 !== 0;
     const w = rot90 ? state.srcH : state.srcW, h = rot90 ? state.srcW : state.srcH;
-    return Math.min(stage.clientWidth / w, stage.clientHeight / h);
+    const sx = stage.clientWidth / w, sy = stage.clientHeight / h;
+    return state.fit === "cover" ? Math.max(sx, sy) : Math.min(sx, sy);
   }
+  function setFit(mode) {
+    state.fit = mode; store.set("fit", mode);
+    state.panX = state.panY = 0; layout();
+    $("fitContain").classList.toggle("on", mode === "contain");
+    $("fitCover").classList.toggle("on", mode === "cover");
+    $("fitBtn").classList.toggle("on", mode === "cover");
+    $("fitLbl").textContent = mode === "cover" ? "Lấp đầy" : "Vừa";
+  }
+  $("fitContain").onclick = () => setFit("contain");
+  $("fitCover").onclick = () => setFit("cover");
+  $("fitBtn").onclick = () => { setFit(state.fit === "cover" ? "contain" : "cover"); toast(state.fit === "cover" ? "Lấp đầy màn hình" : "Vừa màn hình (đủ trang)"); };
   function clampPan() {
     const f = fitScale(), rot90 = state.rotation % 180 !== 0;
     const w = (rot90 ? state.srcH : state.srcW) * f * state.zoom, h = (rot90 ? state.srcW : state.srcH) * f * state.zoom;
@@ -459,33 +527,147 @@
   $("zoomOut").onclick = () => setZoom(state.zoom / 1.25);
   $("resetView").onclick = () => { resetView(); toast("Khung hình gốc"); };
 
+  // Vẽ lại tối đa 1 lần mỗi khung hình màn hình cho mượt
+  let layoutRaf = 0;
+  function requestLayout() { if (!layoutRaf) layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; layout(); }); }
+
   stage.addEventListener("wheel", (e) => {
     e.preventDefault();
     const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
-    setZoom(state.zoom * k, e.clientX, e.clientY);
+    zoomAt(state.zoom * k, e.clientX, e.clientY);
   }, { passive: false });
 
-  // Kéo để di chuyển, chụm 2 ngón để zoom
-  const ptrs = new Map(); let pinch = null;
+  function zoomAt(z, cx, cy) {
+    z = Math.max(ZMIN, Math.min(ZMAX, z));
+    const r = stage.getBoundingClientRect();
+    const sx = cx - r.left - r.width / 2, sy = cy - r.top - r.height / 2;
+    state.panX = sx - (sx - state.panX) * (z / state.zoom);
+    state.panY = sy - (sy - state.panY) * (z / state.zoom);
+    state.zoom = z;
+    if (z === 1 && state.fit === "contain") { state.panX = 0; state.panY = 0; }
+    requestLayout();
+  }
+
+  /* Cảm ứng:
+     - 2 ngón: chụm/mở để zoom, đồng thời di 2 ngón để kéo hình (điểm giữa 2 ngón luôn bám theo nội dung)
+     - 1 ngón: kéo hình đến chỗ cần xem, thả tay hình trôi nhẹ rồi dừng
+     - Chạm 2 lần: phóng to 2.5× ngay chỗ chạm; chạm 2 lần khi đang phóng to: về khung gốc */
+  const ptrs = new Map();
+  let g = null, inertiaRaf = 0, vx = 0, vy = 0, lastT = 0;
+  let tapStart = null, lastTap = { t: 0, x: 0, y: 0 };
+
+  function stopInertia() { cancelAnimationFrame(inertiaRaf); inertiaRaf = 0; }
+  function beginGesture() {
+    const pts = [...ptrs.values()];
+    if (pts.length >= 2) {
+      const [a, b] = pts;
+      g = { type: "pinch", z0: state.zoom, px0: state.panX, py0: state.panY,
+            mx0: (a.x + b.x) / 2, my0: (a.y + b.y) / 2, d0: Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)) };
+    } else if (pts.length === 1) {
+      g = { type: "pan", x0: pts[0].x, y0: pts[0].y, px0: state.panX, py0: state.panY };
+      vx = vy = 0; lastT = performance.now();
+    } else g = null;
+  }
+
   stage.addEventListener("pointerdown", (e) => {
-    stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: state.zoom }; }
-    if (state.zoom > 1) stage.style.cursor = "grabbing";
-    closePanel();
+    stopInertia(); closePanel();
+    try { stage.setPointerCapture(e.pointerId); } catch {}
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    tapStart = ptrs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    beginGesture();
+    stage.style.cursor = "grabbing";
   });
+
   stage.addEventListener("pointermove", (e) => {
-    const p = ptrs.get(e.pointerId); if (!p) return;
-    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
-    if (ptrs.size === 2 && pinch) {
+    const p = ptrs.get(e.pointerId); if (!p || !g) return;
+    const prevX = p.x, prevY = p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (tapStart && Math.hypot(p.x - tapStart.x, p.y - tapStart.y) > 10) tapStart = null;
+    const r = stage.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+
+    if (g.type === "pinch" && ptrs.size >= 2) {
       const [a, b] = [...ptrs.values()];
-      setZoom(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, (a.x + b.x) / 2, (a.y + b.y) / 2);
-    } else if (ptrs.size === 1 && state.zoom > 1) {
-      state.panX += dx; state.panY += dy; layout();
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, d = Math.hypot(a.x - b.x, a.y - b.y);
+      const z = Math.max(ZMIN, Math.min(ZMAX, g.z0 * d / g.d0));
+      // điểm nội dung nằm dưới điểm giữa 2 ngón lúc bắt đầu sẽ đi theo điểm giữa hiện tại
+      state.panX = (mx - cx) - ((g.mx0 - cx) - g.px0) * (z / g.z0);
+      state.panY = (my - cy) - ((g.my0 - cy) - g.py0) * (z / g.z0);
+      state.zoom = z;
+      requestLayout();
+    } else if (g.type === "pan") {
+      state.panX = g.px0 + (p.x - g.x0);
+      state.panY = g.py0 + (p.y - g.y0);
+      const now = performance.now(), dt = Math.max(1, now - lastT);
+      // vận tốc làm mượt (px/ms) cho cú vuốt trôi
+      vx = 0.8 * ((p.x - prevX) / dt) + 0.2 * vx;
+      vy = 0.8 * ((p.y - prevY) / dt) + 0.2 * vy;
+      lastT = now;
+      requestLayout();
     }
   });
-  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (state.zoom > 1) stage.style.cursor = "grab"; };
-  stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", up);
-  stage.addEventListener("dblclick", () => { if (state.zoom > 1) resetView(); else setZoom(2); });
+
+  function endPointer(e) {
+    if (!ptrs.has(e.pointerId)) return;
+    const wasPan = g && g.type === "pan";
+    ptrs.delete(e.pointerId);
+    stage.style.cursor = state.zoom > 1 ? "grab" : "";
+
+    // Chạm 2 lần
+    if (tapStart && ptrs.size === 0 && performance.now() - tapStart.t < 250) {
+      const now = performance.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+        lastTap.t = 0;
+        if (state.zoom > 1.05) animateTo(1, 0, 0);
+        else {
+          const r = stage.getBoundingClientRect(), z = 2.5;
+          const sx = e.clientX - r.left - r.width / 2, sy = e.clientY - r.top - r.height / 2;
+          animateTo(z, sx - (sx - state.panX) * (z / state.zoom), sy - (sy - state.panY) * (z / state.zoom));
+        }
+        tapStart = null; g = null; return;
+      }
+      lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+    tapStart = null;
+
+    if (ptrs.size > 0) { beginGesture(); return; }   // còn 1 ngón sau khi chụm: tiếp tục kéo, không giật hình
+    g = null;
+    if (state.zoom < 1.02 && state.fit === "contain") { animateTo(1, 0, 0); return; }
+
+    // Thả tay sau khi vuốt: hình trôi nhẹ rồi dừng
+    const sp = Math.hypot(vx, vy), MAXV = 2.2;
+    if (sp > MAXV) { vx *= MAXV / sp; vy *= MAXV / sp; }
+    if (wasPan && performance.now() - lastT < 80 && sp > 0.15) {
+      let t = performance.now();
+      const step = (now) => {
+        const dt = Math.min(32, now - t); t = now;
+        state.panX += vx * dt; state.panY += vy * dt;
+        const k = Math.pow(0.94, dt / 16); vx *= k; vy *= k;
+        const bx = state.panX, by = state.panY;
+        layout();                                   // layout() giới hạn vùng kéo
+        if (bx !== state.panX) vx = 0;
+        if (by !== state.panY) vy = 0;
+        inertiaRaf = Math.hypot(vx, vy) > 0.02 ? requestAnimationFrame(step) : 0;
+      };
+      inertiaRaf = requestAnimationFrame(step);
+    }
+  }
+  stage.addEventListener("pointerup", endPointer);
+  stage.addEventListener("pointercancel", endPointer);
+  stage.addEventListener("lostpointercapture", endPointer);
+
+  function animateTo(z1, px1, py1) {
+    stopInertia();
+    const z0 = state.zoom, x0 = state.panX, y0 = state.panY, t0 = performance.now(), dur = 220;
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      state.zoom = z0 + (z1 - z0) * e; state.panX = x0 + (px1 - x0) * e; state.panY = y0 + (py1 - y0) * e;
+      layout();
+      inertiaRaf = k < 1 ? requestAnimationFrame(step) : 0;
+    };
+    inertiaRaf = requestAnimationFrame(step);
+  }
+  // Chuột: nhấp đúp để phóng to / về khung gốc (cảm ứng đã xử lý ở trên)
+  stage.addEventListener("dblclick", (e) => { if (e.pointerType === "touch") return; });
 
   function rotate() { state.rotation = (state.rotation + 90) % 360; store.set("rotation", state.rotation); state.panX = state.panY = 0; layout(); toast("Xoay " + state.rotation + "°"); }
   function mirror() { state.mirror = !state.mirror; store.set("mirror", state.mirror); layout(); toast(state.mirror ? "Đã lật gương" : "Bỏ lật gương"); }
@@ -594,6 +776,7 @@
     else if (k === "+" || k === "=") setZoom(state.zoom * 1.25);
     else if (k === "-" || k === "_") setZoom(state.zoom / 1.25);
     else if (k === "0") resetView();
+    else if (k === "l" || k === "L") $("fitBtn").click();
     else if (k === "Escape") closePanel();
   });
 
@@ -602,7 +785,7 @@
   async function keepAwake() { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wake = await navigator.wakeLock.request("screen"); } catch {} }
   document.addEventListener("visibilitychange", keepAwake);
 
-  layout(); poke(); keepAwake(); startCamera();
+  setFit(state.fit); poke(); keepAwake(); startCamera();
 
   /* ---------- Cài như ứng dụng (chỉ khi chạy trên web https, ví dụ GitHub Pages) ---------- */
   if ("serviceWorker" in navigator && location.protocol === "https:") {

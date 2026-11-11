@@ -1,6 +1,6 @@
 // Lưu ứng dụng vào bộ nhớ máy để mở được cả khi không có mạng.
-const CACHE = "appcam-v1";
-const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "maychieu-v2";
+const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./icon-96.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

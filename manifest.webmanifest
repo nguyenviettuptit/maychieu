@@ -3,6 +3,7 @@
   "short_name": "Máy Chiếu",
   "description": "Chiếu bài làm của học sinh lên TV bằng webcam hoặc camera vật thể.",
   "lang": "vi",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
@@ -10,8 +11,15 @@
   "orientation": "any",
   "background_color": "#07090c",
   "theme_color": "#07090c",
+  "categories": ["education", "productivity"],
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Mở máy chiếu", "url": "./", "icons": [{ "src": "icon-96.png", "sizes": "96x96", "type": "image/png" }] }
   ]
 }

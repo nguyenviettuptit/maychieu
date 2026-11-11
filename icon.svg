@@ -1,9 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#07090c"/>
-  <rect x="96" y="300" width="320" height="120" rx="18" fill="#f3f0e6"/>
-  <path d="M130 340h190M130 375h140" stroke="#3a5aa0" stroke-width="12" stroke-linecap="round"/>
-  <path d="M256 300V170" stroke="#8b95a3" stroke-width="22" stroke-linecap="round"/>
-  <path d="M256 170 330 110" stroke="#8b95a3" stroke-width="22" stroke-linecap="round"/>
-  <rect x="300" y="72" width="110" height="74" rx="16" fill="#4cc2ff" transform="rotate(-20 355 109)"/>
-  <circle cx="355" cy="109" r="18" fill="#04131c"/>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#16283a"/>
+      <stop offset="1" stop-color="#07090c"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4cc2ff" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#4cc2ff" stop-opacity=".06"/>
+    </linearGradient>
+    <linearGradient id="arm" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c9d2dc"/>
+      <stop offset="1" stop-color="#7d8896"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256) scale(0.88) translate(-243 -288)">
+  <!-- light beam from lens to paper -->
+  <path d="M262 186 L176 352 L356 352 Z" fill="url(#beam)"/>
+  <!-- paper -->
+  <g transform="rotate(-4 266 372)">
+    <rect x="160" y="320" width="212" height="104" rx="10" fill="#f4f1e8"/>
+    <path d="M184 348h120M184 372h160M184 396h96" stroke="#3a5aa0" stroke-width="9" stroke-linecap="round"/>
+    <path d="M318 344l10 10 20-22" stroke="#e5484d" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- stand -->
+  <rect x="112" y="398" width="70" height="20" rx="10" fill="#5d6876"/>
+  <path d="M147 404 L147 236 Q147 206 177 196 L232 178" stroke="url(#arm)" stroke-width="20" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="147" cy="236" r="13" fill="#2a333e" stroke="#9aa5b2" stroke-width="5"/>
+  <!-- camera head -->
+  <rect x="210" y="146" width="112" height="52" rx="16" fill="#1d2630" stroke="#3b4756" stroke-width="4"/>
+  <circle cx="266" cy="190" r="26" fill="#0b1118" stroke="#4cc2ff" stroke-width="9"/>
+  <circle cx="266" cy="190" r="10" fill="#4cc2ff"/>
+  <circle cx="273" cy="183" r="4" fill="#e9f7ff"/>
+  <circle cx="306" cy="162" r="5" fill="#ffb648"/>
+  </g>
 </svg>
