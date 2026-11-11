@@ -78,13 +78,13 @@
   input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; cursor: pointer; }
   input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; cursor: pointer; }
   #zoomRange { width: 120px; }
-  /* Điện thoại: thanh công cụ xếp 2 hàng, đủ nút trong tầm tay, zoom bằng 2 ngón nên ẩn thanh trượt */
-  @media (max-width: 640px) {
-    .tb .lbl.hide-sm { display: none; }
-    #toolbar { flex-wrap: wrap; justify-content: center; overflow: visible; width: calc(100vw - 20px); gap: 2px; }
-    #toolbar .sep, #zoomRange, #zoomOut, #zoomIn { display: none; }
-    .tb { min-width: 46px; height: 46px; padding: 0 8px; }
-  }
+  /* Thanh công cụ chỉ giữ 5 nút: Cài đặt, Đổi cam, Xoay, Chụp lưu ảnh, Toàn màn hình.
+     Các nút khác (đóng băng, lật, vừa/lấp đầy) nằm trong bảng Cài đặt; zoom bằng 2 ngón / cuộn chuột. */
+  #focusBtn, #toolbar .zoomgrp, #mirrorBtn, #flipVBtn, #freezeBtn, #fitBtn, #toolbar .sep { display: none !important; }
+  #toolbar { gap: 6px; padding: 6px 8px; }
+  .tb { min-width: 52px; height: 52px; }
+  .tb svg { width: 24px; height: 24px; }
+  @media (max-width: 640px) { .tb .lbl.hide-sm { display: none; } }
 
   /* Bảng cài đặt */
   /* Bảng cài đặt nhỏ ở trên cùng, trong suốt nhẹ: vẫn nhìn thấy hình camera bên dưới khi chỉnh */
@@ -146,14 +146,14 @@
 </div>
 
 <div class="badges" id="badges">
-  <div class="badge" id="camBadge">Đang mở camera…</div>
+  <div class="badge" id="camBadge" hidden></div>
   <div class="badge" id="resBadge" hidden></div>
 </div>
 <div id="freezeBadge" hidden>Đang đóng băng</div>
 
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
-  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.5</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
+  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.6</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
   <h2>Chất lượng hình</h2>
   <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
@@ -179,6 +179,15 @@
       <option value="60">60 fps – mượt nhất, máy nóng hơn</option>
     </select>
     <p class="note">Phòng thiếu sáng camera sẽ tự giảm FPS để đủ sáng. Bật thêm đèn để giữ được 30–45 fps.</p>
+  </div>
+
+  <h2>Hình chiếu</h2>
+  <div class="row">
+    <div class="seg">
+      <button type="button" id="pFreeze">Đóng băng hình</button>
+      <button type="button" id="pMirror">Lật gương</button>
+      <button type="button" id="pFlipV">Lật dọc</button>
+    </div>
   </div>
 
   <h2>Khung hình trên TV</h2>
@@ -941,6 +950,19 @@
     if (!p.hidden) listCameras(); poke();
   };
   $("panelClose").onclick = closePanel;
+
+  // Nút trong bảng cài đặt: đóng băng, lật gương, lật dọc (sáng màu khi đang bật)
+  function syncPanelBtns() {
+    $("pFreeze").classList.toggle("on", state.frozen);
+    $("pFreeze").textContent = state.frozen ? "Tiếp tục hình" : "Đóng băng hình";
+    $("pMirror").classList.toggle("on", state.mirror);
+    $("pFlipV").classList.toggle("on", state.flipV);
+  }
+  $("pFreeze").onclick = () => { $("freezeBtn").click(); syncPanelBtns(); };
+  $("pMirror").onclick = () => { mirror(); syncPanelBtns(); };
+  $("pFlipV").onclick = () => { flipV(); syncPanelBtns(); };
+  ["freezeBtn", "settingsBtn"].forEach(id => $(id).addEventListener("click", syncPanelBtns));
+  document.addEventListener("keydown", () => setTimeout(syncPanelBtns, 0));
 
   /* ---------- Tự ẩn thanh công cụ sau 3 giây ---------- */
   let idleT, overUI = false;
