@@ -154,8 +154,8 @@
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
   <div class="phead"><b>Cài đặt camera</b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
-  <h2>Camera</h2>
-  <div class="row">
+  <h2>Chất lượng hình</h2>
+  <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
     <select id="camSelect"></select>
   </div>
@@ -189,6 +189,7 @@
     </div>
   </div>
 
+  <div hidden>
   <h2>Lấy nét</h2>
   <div class="row">
     <div class="seg" id="focusSeg">
@@ -202,13 +203,14 @@
     </div>
     <p class="note" id="focusNote"></p>
   </div>
+  </div>
 
   <div class="row" id="hwZoomRow" hidden>
     <label for="hwZoomRange">Zoom phần cứng của camera <span id="hwZoomVal"></span></label>
     <input type="range" id="hwZoomRange">
   </div>
 
-  <h2>Hình ảnh</h2>
+  <h2>Độ sáng & tương phản</h2>
   <div class="row">
     <label for="brightRange">Độ sáng <span id="brightVal">100%</span></label>
     <input type="range" id="brightRange" min="50" max="200" value="100">
@@ -217,7 +219,7 @@
     <label for="contrastRange">Độ tương phản <span id="contrastVal">100%</span></label>
     <input type="range" id="contrastRange" min="50" max="250" value="100">
   </div>
-  <div class="seg">
+  <div class="seg" hidden>
     <button type="button" id="bwBtn">Chế độ giấy trắng (tăng chữ)</button>
     <button type="button" id="resetImgBtn">Đặt lại</button>
   </div>
@@ -345,11 +347,13 @@
     showMsg("Đang mở camera…", "Hãy bấm <b>Cho phép</b> khi trình duyệt hỏi quyền dùng camera.", false);
     stopStream();
     const [w, h] = resolveRes().split("x").map(Number);
-    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps } };
+    // resizeMode "none": lấy đúng chế độ gốc của cảm biến, trình duyệt không co giãn lại (nét hơn)
+    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps }, resizeMode: { ideal: "none" } };
     const tries = [];
     if (state.wantFacing) tries.push({ video: { ...base, facingMode: { exact: state.wantFacing } }, audio: false });
     else if (state.deviceId) tries.push({ video: { ...base, deviceId: { exact: state.deviceId } }, audio: false });
     tries.push({ video: { ...base, facingMode: { ideal: "environment" } }, audio: false });
+    tries.push({ video: { width: { ideal: w }, height: { ideal: h } }, audio: false });
     tries.push({ video: true, audio: false });
     let lastErr;
     for (const c of tries) {
@@ -360,6 +364,7 @@
     if (!state.stream) { handleErr(lastErr); return; }
 
     state.track = state.stream.getVideoTracks()[0];
+    try { state.track.contentHint = "detail"; } catch {}   // ưu tiên độ chi tiết (chữ viết) hơn chuyển động
     const s = state.track.getSettings ? state.track.getSettings() : {};
     if (s.deviceId) { state.deviceId = s.deviceId; store.set("deviceId", s.deviceId); }
     state.track.addEventListener("ended", () => showMsg("Camera đã bị ngắt", "Kiểm tra lại dây cắm hoặc chọn camera khác.", true));
@@ -816,11 +821,57 @@
       freezeCanvas.hidden = false;
     } else freezeCanvas.hidden = true;
     state.frozen = on;
+    hdToken++;
+    $("freezeBadge").textContent = "Đang đóng băng";
+    if (on) captureHD(hdToken);
     $("freezeBtn").classList.toggle("on", on);
     $("freezeBadge").hidden = !on;
     $("freezeLbl").textContent = on ? "Tiếp tục" : "Đóng băng";
     $("freezeIcon").innerHTML = on ? '<path d="M7 5v14l12-7z"/>' : '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
   }
+  /* Khi đóng băng: chụp 1 ảnh tĩnh bằng chế độ CHỤP ẢNH của camera (độ phân giải đầy đủ của cảm biến,
+     nét như app camera) rồi thay vào khung hình đóng băng. Chỉ hỗ trợ trên Chrome/Edge (Android, máy tính). */
+  let hdToken = 0;
+  async function captureHD(token) {
+    if (!("ImageCapture" in window) || !state.track || state.track.readyState !== "live") return;
+    try {
+      const ic = new ImageCapture(state.track);
+      const opts = {};
+      try {
+        const pc = await ic.getPhotoCapabilities();
+        if (pc.imageWidth && pc.imageWidth.max) opts.imageWidth = pc.imageWidth.max;
+        if (pc.imageHeight && pc.imageHeight.max) opts.imageHeight = pc.imageHeight.max;
+        if ((pc.fillLightMode || []).includes("off")) opts.fillLightMode = "off";   // không bật đèn flash
+      } catch {}
+      if (token !== hdToken) return;
+      $("freezeBadge").textContent = "Đang chụp ảnh nét cao…";
+      const blob = await ic.takePhoto(opts);
+      if (token !== hdToken) return;
+      let bmp = await createImageBitmap(blob);
+      const MAXW = 4096;   // giới hạn để không tốn bộ nhớ, vẫn rất nét trên TV 4K
+      if (bmp.width > MAXW) {
+        const b2 = await createImageBitmap(blob, { resizeWidth: MAXW, resizeHeight: Math.round(bmp.height * MAXW / bmp.width), resizeQuality: "high" });
+        bmp.close(); bmp = b2;
+      }
+      if (token !== hdToken) { bmp.close(); $("freezeBadge").textContent = "Đang đóng băng"; return; }
+      const vw = video.videoWidth, vh = video.videoHeight;
+      // ảnh ngược hướng với video (dọc/ngang khác nhau) thì giữ khung hình video cho an toàn
+      if (!vw || (bmp.width > bmp.height) !== (vw > vh)) { bmp.close(); $("freezeBadge").textContent = "Đang đóng băng"; return; }
+      // cắt giữa cho đúng tỷ lệ khung video để hình không bị nhảy
+      const va = vw / vh, pa = bmp.width / bmp.height;
+      let sx = 0, sy = 0, sw = bmp.width, sh = bmp.height;
+      if (pa > va + 0.01) { sw = Math.round(sh * va); sx = Math.round((bmp.width - sw) / 2); }
+      else if (pa < va - 0.01) { sh = Math.round(sw / va); sy = Math.round((bmp.height - sh) / 2); }
+      if (sw <= vw) { bmp.close(); $("freezeBadge").textContent = "Đang đóng băng"; return; }  // ảnh không nét hơn video
+      freezeCanvas.width = sw; freezeCanvas.height = sh;
+      freezeCanvas.getContext("2d").drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+      bmp.close();
+      $("freezeBadge").textContent = `Đóng băng · ảnh nét cao ${sw}×${sh}`;
+    } catch {
+      if (token === hdToken) $("freezeBadge").textContent = "Đang đóng băng";
+    }
+  }
+
   $("freezeBtn").onclick = () => { setFrozen(!state.frozen); toast(state.frozen ? "Đã đóng băng hình" : "Hình trực tiếp"); };
 
   /* ---------- Chụp ảnh ---------- */
