@@ -104,6 +104,8 @@
   #panel .seg button { height: 30px; font-size: 12px; }
   @media (pointer: coarse) { #panel .keys, #panel .keysTitle { display: none; } }
   body.panel-open .badges { opacity: 0; }
+  .resetAll { height: 38px; border-radius: 10px; border: 1px solid rgba(76,194,255,.45); background: rgba(76,194,255,.12); color: var(--accent); font-weight: 600; cursor: pointer; margin-top: 4px; }
+  .resetAll:hover { background: rgba(76,194,255,.2); }
 
   /* Vòng lấy nét khi chạm */
   #focusRing { position: fixed; width: 76px; height: 76px; margin: -38px 0 0 -38px; border: 2px solid var(--warn); border-radius: 14px; z-index: 6; pointer-events: none; opacity: 0; transform: scale(1.4); transition: transform .25s ease-out, opacity .2s; }
@@ -153,7 +155,7 @@
 
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
-  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.6</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
+  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.7</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
   <h2>Chất lượng hình</h2>
   <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
@@ -232,6 +234,9 @@
     <button type="button" id="bwBtn">Chế độ giấy trắng (tăng chữ)</button>
     <button type="button" id="resetImgBtn">Đặt lại</button>
   </div>
+
+  <button type="button" class="resetAll" id="resetAllBtn">Đặt lại cài đặt khuyên dùng</button>
+  <p class="note" style="margin-top:-4px">Tự động độ phân giải · 30–45 fps · vừa màn hình · độ sáng, tương phản 100% · không xoay, không lật.</p>
 
   <h2 class="keysTitle">Phím tắt</h2>
   <div class="keys">
@@ -958,6 +963,23 @@
     $("pMirror").classList.toggle("on", state.mirror);
     $("pFlipV").classList.toggle("on", state.flipV);
   }
+  // Đặt lại toàn bộ về cài đặt khuyên dùng ban đầu
+  $("resetAllBtn").onclick = async () => {
+    const needRestart = state.res !== "auto" || state.fps !== 45;
+    state.res = "auto"; store.set("res2", "auto"); $("resSelect").value = "auto";
+    state.fps = 45; store.set("fps2", 45); $("fpsSelect").value = "45";
+    state.rotation = 0; store.set("rotation", 0);
+    state.mirror = false; store.set("mirror", false);
+    state.flipV = false; store.set("flipV", false);
+    state.bw = false; state.bright = 100; state.contrast = 100;
+    if (state.frozen) setFrozen(false);
+    state.zoom = 1; state.panX = 0; state.panY = 0;
+    setFit("contain"); updImg(); syncPanelBtns();
+    if (needRestart) await startCamera();
+    else tuneForSharpness();   // bật lại lấy nét / đo sáng tự động
+    toast("Đã đặt lại cài đặt khuyên dùng");
+  };
+
   $("pFreeze").onclick = () => { $("freezeBtn").click(); syncPanelBtns(); };
   $("pMirror").onclick = () => { mirror(); syncPanelBtns(); };
   $("pFlipV").onclick = () => { flipV(); syncPanelBtns(); };
