@@ -153,7 +153,7 @@
 
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
-  <div class="phead"><b>Cài đặt camera</b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
+  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.5</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
   <h2>Chất lượng hình</h2>
   <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
@@ -173,12 +173,12 @@
   <div class="row">
     <label for="fpsSelect">Số khung hình / giây (FPS)</label>
     <select id="fpsSelect">
-      <option value="30">30 fps – mượt, vừa sức (khuyên dùng)</option>
-      <option value="24">24 fps – mát máy hơn</option>
-      <option value="15">15 fps – ít nóng nhất, tiết kiệm pin</option>
+      <option value="45">30–45 fps – mượt (khuyên dùng)</option>
+      <option value="30">30 fps – cân bằng, mát hơn</option>
+      <option value="24">24 fps – mát máy</option>
       <option value="60">60 fps – mượt nhất, máy nóng hơn</option>
     </select>
-    <p class="note">Chiếu bài viết, trang sách thì 24–30 fps là đủ mượt. Giảm FPS hoặc độ phân giải nếu camera, điện thoại bị nóng.</p>
+    <p class="note">Phòng thiếu sáng camera sẽ tự giảm FPS để đủ sáng. Bật thêm đèn để giữ được 30–45 fps.</p>
   </div>
 
   <h2>Khung hình trên TV</h2>
@@ -311,7 +311,7 @@
     stream: null, track: null, caps: {},
     deviceId: store.get("deviceId", ""),
     res: store.get("res2", "auto"),
-    fps: store.get("fps", 30),
+    fps: store.get("fps2", 45),
     fit: store.get("fit", "contain"),
     realFps: 0,
     rotation: store.get("rotation", 0),
@@ -348,7 +348,9 @@
     stopStream();
     const [w, h] = resolveRes().split("x").map(Number);
     // resizeMode "none": lấy đúng chế độ gốc của cảm biến, trình duyệt không co giãn lại (nét hơn)
-    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps }, resizeMode: { ideal: "none" } };
+    // advanced frameRate min 30: ưu tiên chế độ chạy được ≥30 fps (vd. webcam 4K chỉ 15 fps sẽ tự chọn 1080p 30 fps cho mượt)
+    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps }, resizeMode: { ideal: "none" },
+                   advanced: state.fps >= 30 ? [{ frameRate: { min: 30 } }] : [] };
     const tries = [];
     if (state.wantFacing) tries.push({ video: { ...base, facingMode: { exact: state.wantFacing } }, audio: false });
     else if (state.deviceId) tries.push({ video: { ...base, deviceId: { exact: state.deviceId } }, audio: false });
@@ -442,9 +444,9 @@
   $("resSelect").onchange = (e) => { state.res = e.target.value; store.set("res2", state.res); startCamera(); };
   $("fpsSelect").value = String(state.fps);
   $("fpsSelect").onchange = async (e) => {
-    state.fps = Number(e.target.value); store.set("fps", state.fps);
-    try { await state.track.applyConstraints({ frameRate: { ideal: state.fps, max: state.fps } }); updateInfo(); toast(state.fps + " fps"); }
-    catch { startCamera(); }
+    state.fps = Number(e.target.value); store.set("fps2", state.fps);
+    await startCamera();   // mở lại camera với FPS mới, giữ nguyên độ phân giải
+    toast(state.fps === 45 ? "30–45 fps" : state.fps + " fps");
   };
 
   // Đo FPS thực tế camera đang gửi
@@ -977,8 +979,17 @@
   setFit(state.fit); poke(); keepAwake(); startCamera();
 
   /* ---------- Cài như ứng dụng (chỉ khi chạy trên web https, ví dụ GitHub Pages) ---------- */
+  // Tự cập nhật: mỗi lần mở / quay lại app thì hỏi bản mới; có bản mới là tải lại trang 1 lần
   if ("serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController && !reloaded) { reloaded = true; location.reload(); }
+    });
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
+    }).catch(() => {});
   }
 })();
 </script>
