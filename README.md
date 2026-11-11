@@ -2,7 +2,7 @@
 
 Ứng dụng web chiếu bài làm của học sinh lên TV / máy chiếu bằng webcam hoặc camera vật thể.
 
-Mở: https://nguyenviettuptit.github.io/appcam/
+Mở: https://nguyenviettuptit.github.io/maychieu/
 
 - Chọn camera, độ phân giải cao nhất (tới 4K), lấy nét tự động / thủ công
 - Thu phóng 1×–8× (nút, thanh trượt, cuộn chuột, chụm 2 ngón)
