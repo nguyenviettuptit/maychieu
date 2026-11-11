@@ -1,5 +1,5 @@
 // Lưu ứng dụng vào bộ nhớ máy để mở được cả khi không có mạng.
-const CACHE = "maychieu-v2";
+const CACHE = "maychieu-v3";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./icon-96.png"];
 
 self.addEventListener("install", (e) => {
