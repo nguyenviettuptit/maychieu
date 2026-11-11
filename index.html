@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Máy Chiếu Vật Thể</title>
+<meta name="theme-color" content="#07090c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Máy Chiếu">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  /* Toàn màn hình là sân khấu hình ảnh; thanh công cụ nổi ở đáy, bảng cài đặt bật lên phía trên. */
+  :root {
+    --bg: #07090c;
+    --panel: rgba(22, 26, 32, 0.86);
+    --panel-solid: #161a20;
+    --line: rgba(255, 255, 255, 0.09);
+    --fg: #e9edf2;
+    --muted: #8b95a3;
+    --accent: #4cc2ff;
+    --accent-ink: #04131c;
+    --warn: #ffb648;
+    --danger: #ff6b6b;
+    --radius: 14px;
+    --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font); overflow: hidden; }
+  body.idle { cursor: none; }
+  button, select, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* Sân khấu */
+  #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; background: var(--bg); }
+  #media { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; will-change: transform; }
+  #media video, #media canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #media canvas { z-index: 1; }
+
+  /* Huy hiệu trạng thái */
+  .badges { position: fixed; top: max(14px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); display: flex; gap: 8px; flex-wrap: wrap; z-index: 5; transition: opacity .35s; pointer-events: none; }
+  .badge { background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 5px 10px; border-radius: 999px; font-size: 12px; letter-spacing: .02em; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .badge b { color: var(--fg); font-weight: 600; }
+  #freezeBadge { position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); z-index: 5; background: var(--warn); color: #1d1300; font-weight: 700; padding: 6px 12px; border-radius: 999px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+  #freezeBadge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #1d1300; }
+
+  /* Thanh công cụ nổi */
+  #toolbar {
+    position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; padding: 6px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    z-index: 10; transition: opacity .35s, transform .35s; max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none;
+  }
+  #toolbar::-webkit-scrollbar { display: none; }
+  body.idle #toolbar { opacity: 0; transform: translate(-50%, 16px); pointer-events: none; }
+  body.idle .badges { opacity: 0; }
+  .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; flex: none; }
+  .tb {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-width: 44px; height: 44px; padding: 0 10px; border: 0; border-radius: 12px; background: transparent; cursor: pointer;
+    color: var(--fg); transition: background .15s, color .15s;
+  }
+  .tb:hover { background: rgba(255,255,255,.08); }
+  .tb:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tb.on { background: var(--accent); color: var(--accent-ink); }
+  .tb.warn.on { background: var(--warn); color: #1d1300; }
+  .tb svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tb .lbl { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .zoomgrp { display: flex; align-items: center; gap: 2px; flex: none; }
+  #zoomVal { width: 46px; text-align: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
+  input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 4px; background: rgba(255,255,255,.18); outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; cursor: pointer; }
+  input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; cursor: pointer; }
+  #zoomRange { width: 120px; }
+  @media (max-width: 640px) { #zoomRange { width: 70px; } .tb .lbl.hide-sm { display: none; } }
+
+  /* Bảng cài đặt */
+  #panel {
+    position: fixed; left: 50%; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 70px); transform: translateX(-50%);
+    width: min(420px, calc(100vw - 24px)); max-height: calc(100vh - 120px); overflow-y: auto;
+    background: var(--panel-solid); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 18px 50px rgba(0,0,0,.55); padding: 16px; z-index: 11; display: grid; gap: 14px;
+  }
+  #panel h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .row { display: grid; gap: 6px; }
+  .row label, .row .k { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+  .row label span { color: var(--fg); font-variant-numeric: tabular-nums; }
+  select { width: 100%; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: #0f1216; padding: 0 10px; }
+  .seg { display: flex; gap: 4px; background: #0f1216; border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font-size: 13px; }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .seg button:disabled { opacity: .35; cursor: not-allowed; }
+  .row input[type=range] { width: 100%; }
+  .note { font-size: 12px; color: var(--muted); margin: 0; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; color: var(--muted); }
+  kbd { font: 600 11px/1 var(--font); background: #0f1216; border: 1px solid var(--line); border-bottom-width: 2px; padding: 3px 6px; border-radius: 5px; color: var(--fg); text-align: center; }
+
+  /* Thông báo / lỗi */
+  #msg { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20; background: var(--bg); padding: 24px; }
+  #msg .box { max-width: 460px; text-align: center; display: grid; gap: 14px; justify-items: center; }
+  #msg h1 { margin: 0; font-size: 22px; font-weight: 650; }
+  #msg p { margin: 0; color: var(--muted); }
+  .btn { height: 44px; padding: 0 20px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 650; cursor: pointer; }
+  .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.12); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 12px; font-size: 16px; font-weight: 600; z-index: 30; pointer-events: none; opacity: 0; transition: opacity .25s; }
+  #toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="media">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="freezeCanvas" hidden></canvas>
+  </div>
+</div>
+
+<div class="badges" id="badges">
+  <div class="badge" id="camBadge">Đang mở camera…</div>
+  <div class="badge" id="resBadge" hidden></div>
+</div>
+<div id="freezeBadge" hidden>Đang đóng băng</div>
+
+<div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
+  <h2>Camera</h2>
+  <div class="row">
+    <label for="camSelect">Thiết bị đầu vào</label>
+    <select id="camSelect"></select>
+  </div>
+  <div class="row">
+    <label for="resSelect">Độ phân giải yêu cầu</label>
+    <select id="resSelect">
+      <option value="4096x2160">Cao nhất có thể (4K)</option>
+      <option value="2560x1440">2K – 1440p</option>
+      <option value="1920x1080">Full HD – 1080p</option>
+      <option value="1280x720">HD – 720p (máy yếu)</option>
+    </select>
+    <p class="note" id="resNote"></p>
+  </div>
+
+  <h2>Lấy nét</h2>
+  <div class="row">
+    <div class="seg" id="focusSeg">
+      <button type="button" id="focusAuto">Tự động</button>
+      <button type="button" id="focusOnce">Nét một lần</button>
+      <button type="button" id="focusManual">Thủ công</button>
+    </div>
+    <div class="row" id="focusDistRow" hidden>
+      <label for="focusRange">Khoảng cách nét <span id="focusVal"></span></label>
+      <input type="range" id="focusRange">
+    </div>
+    <p class="note" id="focusNote"></p>
+  </div>
+
+  <div class="row" id="hwZoomRow" hidden>
+    <label for="hwZoomRange">Zoom phần cứng của camera <span id="hwZoomVal"></span></label>
+    <input type="range" id="hwZoomRange">
+  </div>
+
+  <h2>Hình ảnh</h2>
+  <div class="row">
+    <label for="brightRange">Độ sáng <span id="brightVal">100%</span></label>
+    <input type="range" id="brightRange" min="50" max="200" value="100">
+  </div>
+  <div class="row">
+    <label for="contrastRange">Độ tương phản <span id="contrastVal">100%</span></label>
+    <input type="range" id="contrastRange" min="50" max="250" value="100">
+  </div>
+  <div class="seg">
+    <button type="button" id="bwBtn">Chế độ giấy trắng (tăng chữ)</button>
+    <button type="button" id="resetImgBtn">Đặt lại</button>
+  </div>
+
+  <h2>Phím tắt</h2>
+  <div class="keys">
+    <kbd>Space</kbd><span>Đóng băng / tiếp tục</span>
+    <kbd>F</kbd><span>Toàn màn hình</span>
+    <kbd>R</kbd><span>Xoay 90°</span>
+    <kbd>M</kbd><span>Lật gương</span>
+    <kbd>+ / −</kbd><span>Phóng to / thu nhỏ (hoặc cuộn chuột)</span>
+    <kbd>0</kbd><span>Về khung hình gốc</span>
+    <kbd>S</kbd><span>Chụp ảnh lưu về máy</span>
+  </div>
+</div>
+
+<div id="toolbar" role="toolbar" aria-label="Điều khiển">
+  <button class="tb" id="settingsBtn" title="Chọn camera & cài đặt" aria-label="Cài đặt">
+    <svg viewBox="0 0 24 24"><path d="M3 7h3l2-3h8l2 3h3v13H3z"/><circle cx="12" cy="13" r="4"/></svg>
+    <span class="lbl hide-sm">Camera</span>
+  </button>
+  <div class="sep"></div>
+  <div class="zoomgrp">
+    <button class="tb" id="zoomOut" title="Thu nhỏ (−)" aria-label="Thu nhỏ"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-5-5"/></svg></button>
+    <input type="range" id="zoomRange" min="1" max="8" step="0.05" value="1" aria-label="Mức thu phóng">
+    <button class="tb" id="zoomIn" title="Phóng to (+)" aria-label="Phóng to"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M21 21l-5-5"/></svg></button>
+    <span id="zoomVal">1.0×</span>
+    <button class="tb" id="resetView" title="Về khung hình gốc (0)" aria-label="Về khung gốc"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+  <div class="sep"></div>
+  <button class="tb" id="rotateBtn" title="Xoay 90° (R)" aria-label="Xoay">
+    <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+    <span class="lbl" id="rotVal">0°</span>
+  </button>
+  <button class="tb" id="mirrorBtn" title="Lật gương (M)" aria-label="Lật gương">
+    <svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M8 7 3 17h5z"/><path d="M16 7l5 10h-5z"/></svg>
+  </button>
+  <button class="tb" id="flipVBtn" title="Lật dọc" aria-label="Lật dọc">
+    <svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M7 8 17 3v5z"/><path d="M7 16l10 5v-5z"/></svg>
+  </button>
+  <div class="sep"></div>
+  <button class="tb warn" id="freezeBtn" title="Đóng băng hình (Space)" aria-label="Đóng băng">
+    <svg viewBox="0 0 24 24" id="freezeIcon"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    <span class="lbl hide-sm" id="freezeLbl">Đóng băng</span>
+  </button>
+  <button class="tb" id="snapBtn" title="Chụp ảnh lưu về máy (S)" aria-label="Chụp ảnh">
+    <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>
+  </button>
+  <button class="tb" id="fsBtn" title="Toàn màn hình (F)" aria-label="Toàn màn hình">
+    <svg viewBox="0 0 24 24" id="fsIcon"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  </button>
+</div>
+
+<div id="msg">
+  <div class="box">
+    <div class="spinner" id="msgSpin"></div>
+    <h1 id="msgTitle">Đang mở camera…</h1>
+    <p id="msgText">Hãy bấm <b>Cho phép</b> khi trình duyệt hỏi quyền dùng camera.</p>
+    <button class="btn" id="msgBtn" hidden>Thử lại</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const video = $("video"), media = $("media"), stage = $("stage"), freezeCanvas = $("freezeCanvas");
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("visualizer." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("visualizer." + k, JSON.stringify(v)); } catch {} }
+  };
+
+  const state = {
+    stream: null, track: null, caps: {},
+    deviceId: store.get("deviceId", ""),
+    res: store.get("res", "4096x2160"),
+    rotation: store.get("rotation", 0),
+    mirror: store.get("mirror", false),
+    flipV: store.get("flipV", false),
+    zoom: 1, panX: 0, panY: 0,
+    frozen: false,
+    bright: 100, contrast: 100, bw: false,
+    srcW: 1280, srcH: 720
+  };
+  const ZMIN = 1, ZMAX = 8;
+
+  /* ---------- Thông báo ---------- */
+  let toastT;
+  function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 1100); }
+  function showMsg(title, text, retry) {
+    $("msg").hidden = false; $("msgTitle").textContent = title; $("msgText").innerHTML = text;
+    $("msgSpin").hidden = !!retry; $("msgBtn").hidden = !retry;
+  }
+  $("msgBtn").onclick = () => startCamera();
+
+  /* ---------- Camera ---------- */
+  function stopStream() {
+    if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null; state.track = null;
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showMsg("Trình duyệt không hỗ trợ camera", "Hãy mở file bằng <b>Google Chrome</b> hoặc <b>Microsoft Edge</b> bản mới trên máy tính.", true);
+      return;
+    }
+    showMsg("Đang mở camera…", "Hãy bấm <b>Cho phép</b> khi trình duyệt hỏi quyền dùng camera.", false);
+    stopStream();
+    const [w, h] = state.res.split("x").map(Number);
+    const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: 30 } };
+    const tries = [];
+    if (state.deviceId) tries.push({ video: { ...base, deviceId: { exact: state.deviceId } }, audio: false });
+    tries.push({ video: { ...base, facingMode: { ideal: "environment" } }, audio: false });
+    tries.push({ video: true, audio: false });
+    let lastErr;
+    for (const c of tries) {
+      try { state.stream = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch (e) { lastErr = e; if (e && (e.name === "NotAllowedError" || e.name === "SecurityError")) break; }
+    }
+    if (!state.stream) { handleErr(lastErr); return; }
+
+    state.track = state.stream.getVideoTracks()[0];
+    const s = state.track.getSettings ? state.track.getSettings() : {};
+    if (s.deviceId) { state.deviceId = s.deviceId; store.set("deviceId", s.deviceId); }
+    state.track.addEventListener("ended", () => showMsg("Camera đã bị ngắt", "Kiểm tra lại dây cắm hoặc chọn camera khác.", true));
+
+    video.srcObject = state.stream;
+    try { await video.play(); } catch {}
+    await new Promise(r => { if (video.videoWidth) r(); else video.addEventListener("loadedmetadata", r, { once: true }); });
+
+    $("msg").hidden = true;
+    if (state.frozen) setFrozen(false);
+    await listCameras();
+    readCaps();
+    updateInfo();
+    layout();
+  }
+
+  function handleErr(e) {
+    const n = e && e.name;
+    if (n === "NotAllowedError" || n === "SecurityError")
+      showMsg("Chưa có quyền dùng camera", "Bấm vào biểu tượng ổ khóa / camera trên thanh địa chỉ, chọn <b>Cho phép</b> camera rồi bấm Thử lại.", true);
+    else if (n === "NotFoundError" || n === "OverconstrainedError")
+      showMsg("Không tìm thấy camera", "Hãy cắm webcam / camera vật thể vào máy rồi bấm Thử lại.", true);
+    else if (n === "NotReadableError")
+      showMsg("Camera đang bận", "Camera đang được ứng dụng khác dùng (Zoom, Teams, Meet…). Đóng ứng dụng đó rồi bấm Thử lại.", true);
+    else
+      showMsg("Không mở được camera", (e && e.message) ? String(e.message).replace(/</g, "&lt;") : "Lỗi không xác định.", true);
+  }
+
+  async function listCameras() {
+    let devs = [];
+    try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"); } catch {}
+    const sel = $("camSelect"); sel.innerHTML = "";
+    devs.forEach((d, i) => {
+      const o = document.createElement("option");
+      o.value = d.deviceId; o.textContent = d.label || ("Camera " + (i + 1));
+      if (d.deviceId === state.deviceId) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (!devs.length) { const o = document.createElement("option"); o.textContent = "Không có camera"; sel.appendChild(o); }
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener)
+    navigator.mediaDevices.addEventListener("devicechange", () => { listCameras(); });
+
+  $("camSelect").onchange = (e) => { state.deviceId = e.target.value; store.set("deviceId", state.deviceId); resetView(); startCamera(); };
+  $("resSelect").value = state.res;
+  $("resSelect").onchange = (e) => { state.res = e.target.value; store.set("res", state.res); startCamera(); };
+
+  function readCaps() {
+    state.caps = (state.track && state.track.getCapabilities) ? state.track.getCapabilities() : {};
+    const c = state.caps, s = state.track.getSettings ? state.track.getSettings() : {};
+    const modes = c.focusMode || [];
+    $("focusAuto").disabled = !modes.includes("continuous");
+    $("focusOnce").disabled = !modes.includes("single-shot");
+    $("focusManual").disabled = !modes.includes("manual");
+    if (!modes.length) $("focusNote").textContent = "Camera này không cho trình duyệt điều khiển lấy nét (camera sẽ tự xử lý).";
+    else $("focusNote").textContent = "";
+    if (c.focusDistance) {
+      const r = $("focusRange"); r.min = c.focusDistance.min; r.max = c.focusDistance.max; r.step = c.focusDistance.step || 0.01;
+      r.value = s.focusDistance != null ? s.focusDistance : c.focusDistance.min;
+      $("focusVal").textContent = Number(r.value).toFixed(2);
+    }
+    markFocus(s.focusMode || (modes.includes("continuous") ? "continuous" : ""));
+    if (modes.includes("continuous") && s.focusMode !== "continuous") setFocus("continuous");
+
+    if (c.zoom && c.zoom.max > c.zoom.min) {
+      const r = $("hwZoomRange"); r.min = c.zoom.min; r.max = c.zoom.max; r.step = c.zoom.step || 0.1;
+      r.value = s.zoom != null ? s.zoom : c.zoom.min; $("hwZoomVal").textContent = Number(r.value).toFixed(1) + "×";
+      $("hwZoomRow").hidden = false;
+    } else $("hwZoomRow").hidden = true;
+
+    const maxW = c.width && c.width.max, maxH = c.height && c.height.max;
+    $("resNote").textContent = maxW ? `Camera hỗ trợ tối đa ${maxW}×${maxH}.` : "";
+  }
+
+  function markFocus(m) {
+    $("focusAuto").classList.toggle("on", m === "continuous");
+    $("focusOnce").classList.toggle("on", m === "single-shot");
+    $("focusManual").classList.toggle("on", m === "manual");
+    $("focusDistRow").hidden = !(m === "manual" && state.caps.focusDistance);
+  }
+  async function setFocus(mode, dist) {
+    if (!state.track) return;
+    const adv = { focusMode: mode };
+    if (mode === "manual" && dist != null && state.caps.focusDistance) adv.focusDistance = Number(dist);
+    try { await state.track.applyConstraints({ advanced: [adv] }); markFocus(mode); }
+    catch { toast("Camera không nhận lệnh lấy nét"); }
+  }
+  $("focusAuto").onclick = () => setFocus("continuous");
+  $("focusOnce").onclick = () => setFocus("single-shot");
+  $("focusManual").onclick = () => setFocus("manual", $("focusRange").value);
+  $("focusRange").oninput = (e) => { $("focusVal").textContent = Number(e.target.value).toFixed(2); setFocus("manual", e.target.value); };
+  $("hwZoomRange").oninput = async (e) => {
+    $("hwZoomVal").textContent = Number(e.target.value).toFixed(1) + "×";
+    try { await state.track.applyConstraints({ advanced: [{ zoom: Number(e.target.value) }] }); } catch {}
+  };
+
+  function updateInfo() {
+    state.srcW = video.videoWidth || state.srcW; state.srcH = video.videoHeight || state.srcH;
+    const lbl = state.track ? state.track.label : "";
+    $("camBadge").innerHTML = "<b></b>"; $("camBadge").firstChild.textContent = lbl || "Camera";
+    const s = state.track && state.track.getSettings ? state.track.getSettings() : {};
+    const fps = s.frameRate ? " · " + Math.round(s.frameRate) + " fps" : "";
+    $("resBadge").textContent = state.srcW + "×" + state.srcH + fps; $("resBadge").hidden = false;
+  }
+  video.addEventListener("resize", () => { updateInfo(); layout(); });
+
+  /* ---------- Bố cục, xoay, lật, zoom ---------- */
+  function fitScale() {
+    const rot90 = state.rotation % 180 !== 0;
+    const w = rot90 ? state.srcH : state.srcW, h = rot90 ? state.srcW : state.srcH;
+    return Math.min(stage.clientWidth / w, stage.clientHeight / h);
+  }
+  function clampPan() {
+    const f = fitScale(), rot90 = state.rotation % 180 !== 0;
+    const w = (rot90 ? state.srcH : state.srcW) * f * state.zoom, h = (rot90 ? state.srcW : state.srcH) * f * state.zoom;
+    const mx = Math.max(0, (w - stage.clientWidth) / 2), my = Math.max(0, (h - stage.clientHeight) / 2);
+    state.panX = Math.max(-mx, Math.min(mx, state.panX));
+    state.panY = Math.max(-my, Math.min(my, state.panY));
+  }
+  function layout() {
+    const f = fitScale();
+    media.style.width = state.srcW * f + "px";
+    media.style.height = state.srcH * f + "px";
+    clampPan();
+    media.style.transform =
+      `translate(-50%,-50%) translate(${state.panX}px,${state.panY}px) rotate(${state.rotation}deg) scale(${state.zoom}) scale(${state.mirror ? -1 : 1},${state.flipV ? -1 : 1})`;
+    media.style.filter = filterStr();
+    $("zoomRange").value = state.zoom;
+    $("zoomVal").textContent = state.zoom.toFixed(1) + "×";
+    $("rotVal").textContent = state.rotation + "°";
+    $("mirrorBtn").classList.toggle("on", state.mirror);
+    $("flipVBtn").classList.toggle("on", state.flipV);
+    stage.style.cursor = state.zoom > 1 ? "grab" : "";
+  }
+  function filterStr() {
+    const parts = [`brightness(${state.bright}%)`, `contrast(${state.contrast}%)`];
+    if (state.bw) parts.push("grayscale(1)");
+    return parts.join(" ");
+  }
+  window.addEventListener("resize", layout);
+
+  function setZoom(z, cx, cy) {
+    z = Math.max(ZMIN, Math.min(ZMAX, z));
+    if (cx != null) {
+      const sx = cx - stage.clientWidth / 2, sy = cy - stage.clientHeight / 2;
+      state.panX = sx - (sx - state.panX) * (z / state.zoom);
+      state.panY = sy - (sy - state.panY) * (z / state.zoom);
+    } else {
+      state.panX *= z / state.zoom; state.panY *= z / state.zoom;
+    }
+    state.zoom = z;
+    if (z === 1) { state.panX = 0; state.panY = 0; }
+    layout();
+  }
+  function resetView() { state.zoom = 1; state.panX = 0; state.panY = 0; layout(); }
+
+  $("zoomRange").oninput = (e) => setZoom(Number(e.target.value));
+  $("zoomIn").onclick = () => setZoom(state.zoom * 1.25);
+  $("zoomOut").onclick = () => setZoom(state.zoom / 1.25);
+  $("resetView").onclick = () => { resetView(); toast("Khung hình gốc"); };
+
+  stage.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+    setZoom(state.zoom * k, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // Kéo để di chuyển, chụm 2 ngón để zoom
+  const ptrs = new Map(); let pinch = null;
+  stage.addEventListener("pointerdown", (e) => {
+    stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: state.zoom }; }
+    if (state.zoom > 1) stage.style.cursor = "grabbing";
+    closePanel();
+  });
+  stage.addEventListener("pointermove", (e) => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    if (ptrs.size === 2 && pinch) {
+      const [a, b] = [...ptrs.values()];
+      setZoom(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    } else if (ptrs.size === 1 && state.zoom > 1) {
+      state.panX += dx; state.panY += dy; layout();
+    }
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (state.zoom > 1) stage.style.cursor = "grab"; };
+  stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", up);
+  stage.addEventListener("dblclick", () => { if (state.zoom > 1) resetView(); else setZoom(2); });
+
+  function rotate() { state.rotation = (state.rotation + 90) % 360; store.set("rotation", state.rotation); state.panX = state.panY = 0; layout(); toast("Xoay " + state.rotation + "°"); }
+  function mirror() { state.mirror = !state.mirror; store.set("mirror", state.mirror); layout(); toast(state.mirror ? "Đã lật gương" : "Bỏ lật gương"); }
+  function flipV() { state.flipV = !state.flipV; store.set("flipV", state.flipV); layout(); toast(state.flipV ? "Đã lật dọc" : "Bỏ lật dọc"); }
+  $("rotateBtn").onclick = rotate; $("mirrorBtn").onclick = mirror; $("flipVBtn").onclick = flipV;
+
+  /* ---------- Đóng băng ---------- */
+  function setFrozen(on) {
+    if (on) {
+      if (!video.videoWidth) return;
+      freezeCanvas.width = video.videoWidth; freezeCanvas.height = video.videoHeight;
+      freezeCanvas.getContext("2d").drawImage(video, 0, 0);
+      freezeCanvas.hidden = false;
+    } else freezeCanvas.hidden = true;
+    state.frozen = on;
+    $("freezeBtn").classList.toggle("on", on);
+    $("freezeBadge").hidden = !on;
+    $("freezeLbl").textContent = on ? "Tiếp tục" : "Đóng băng";
+    $("freezeIcon").innerHTML = on ? '<path d="M7 5v14l12-7z"/>' : '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+  }
+  $("freezeBtn").onclick = () => { setFrozen(!state.frozen); toast(state.frozen ? "Đã đóng băng hình" : "Hình trực tiếp"); };
+
+  /* ---------- Chụp ảnh ---------- */
+  function snapshot() {
+    const src = state.frozen ? freezeCanvas : video;
+    const w = state.frozen ? freezeCanvas.width : video.videoWidth, h = state.frozen ? freezeCanvas.height : video.videoHeight;
+    if (!w) return;
+    const rot90 = state.rotation % 180 !== 0;
+    const c = document.createElement("canvas"); c.width = rot90 ? h : w; c.height = rot90 ? w : h;
+    const g = c.getContext("2d");
+    g.filter = filterStr();
+    g.translate(c.width / 2, c.height / 2); g.rotate(state.rotation * Math.PI / 180);
+    g.scale(state.mirror ? -1 : 1, state.flipV ? -1 : 1);
+    g.drawImage(src, -w / 2, -h / 2, w, h);
+    const d = new Date(), pad = (n) => String(n).padStart(2, "0");
+    const name = `bai-lam_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+    c.toBlob((b) => {
+      if (!b) return;
+      const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast("Đã lưu ảnh");
+    }, "image/png");
+  }
+  $("snapBtn").onclick = snapshot;
+
+  /* ---------- Hình ảnh ---------- */
+  function updImg() {
+    $("brightVal").textContent = state.bright + "%"; $("contrastVal").textContent = state.contrast + "%";
+    $("brightRange").value = state.bright; $("contrastRange").value = state.contrast;
+    $("bwBtn").classList.toggle("on", state.bw); layout();
+  }
+  $("brightRange").oninput = (e) => { state.bright = +e.target.value; updImg(); };
+  $("contrastRange").oninput = (e) => { state.contrast = +e.target.value; updImg(); };
+  $("bwBtn").onclick = () => { state.bw = !state.bw; if (state.bw) { state.bright = 115; state.contrast = 160; } else { state.bright = 100; state.contrast = 100; } updImg(); };
+  $("resetImgBtn").onclick = () => { state.bw = false; state.bright = 100; state.contrast = 100; updImg(); };
+
+  /* ---------- Toàn màn hình ---------- */
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  async function toggleFs() {
+    try {
+      if (!fsEl()) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: "hide" });
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    } catch { toast("Trình duyệt không cho toàn màn hình"); }
+  }
+  function onFs() {
+    const on = !!fsEl(); $("fsBtn").classList.toggle("on", on);
+    $("fsIcon").innerHTML = on ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>';
+    setTimeout(layout, 50);
+  }
+  document.addEventListener("fullscreenchange", onFs); document.addEventListener("webkitfullscreenchange", onFs);
+  $("fsBtn").onclick = toggleFs;
+
+  /* ---------- Bảng cài đặt ---------- */
+  function closePanel() { $("panel").hidden = true; $("settingsBtn").classList.remove("on"); }
+  $("settingsBtn").onclick = () => { const p = $("panel"); p.hidden = !p.hidden; $("settingsBtn").classList.toggle("on", !p.hidden); if (!p.hidden) listCameras(); poke(); };
+
+  /* ---------- Tự ẩn thanh công cụ sau 3 giây ---------- */
+  let idleT, overUI = false;
+  function poke() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleT);
+    idleT = setTimeout(() => { if (!overUI && $("panel").hidden) document.body.classList.add("idle"); }, 3000);
+  }
+  ["mousemove", "pointerdown", "touchstart", "keydown", "wheel"].forEach(ev => document.addEventListener(ev, poke, { passive: true }));
+  [$("toolbar"), $("panel")].forEach(el => {
+    el.addEventListener("mouseenter", () => { overUI = true; poke(); });
+    el.addEventListener("mouseleave", () => { overUI = false; poke(); });
+  });
+
+  /* ---------- Phím tắt ---------- */
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && e.target.type !== "range")) return;
+    const k = e.key;
+    if (k === " ") { e.preventDefault(); $("freezeBtn").click(); }
+    else if (k === "f" || k === "F") toggleFs();
+    else if (k === "r" || k === "R") rotate();
+    else if (k === "m" || k === "M") mirror();
+    else if (k === "s" || k === "S") snapshot();
+    else if (k === "+" || k === "=") setZoom(state.zoom * 1.25);
+    else if (k === "-" || k === "_") setZoom(state.zoom / 1.25);
+    else if (k === "0") resetView();
+    else if (k === "Escape") closePanel();
+  });
+
+  /* ---------- Giữ màn hình luôn sáng ---------- */
+  let wake;
+  async function keepAwake() { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wake = await navigator.wakeLock.request("screen"); } catch {} }
+  document.addEventListener("visibilitychange", keepAwake);
+
+  layout(); poke(); keepAwake(); startCamera();
+
+  /* ---------- Cài như ứng dụng (chỉ khi chạy trên web https, ví dụ GitHub Pages) ---------- */
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

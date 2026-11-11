@@ -1,0 +1,17 @@
+{
+  "name": "Máy Chiếu Vật Thể",
+  "short_name": "Máy Chiếu",
+  "description": "Chiếu bài làm của học sinh lên TV bằng webcam hoặc camera vật thể.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
