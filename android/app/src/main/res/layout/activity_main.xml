@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Màn hình duy nhất: hình camera toàn màn hình, thanh 4 nút ở dưới, nút tròn nhỏ ẩn/hiện ở góc,
+     bảng cài đặt nhỏ ở trên. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000">
+
+    <!-- Khung hình: xoay / lật áp dụng cho cả hình trực tiếp và hình đóng băng -->
+    <FrameLayout
+        android:id="@+id/stage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ImageView
+            android:id="@+id/frozenView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#FF000000"
+            android:scaleType="matrix"
+            android:visibility="gone"
+            android:contentDescription="Hình đóng băng" />
+    </FrameLayout>
+
+    <View
+        android:id="@+id/focusRing"
+        android:layout_width="76dp"
+        android:layout_height="76dp"
+        android:background="@drawable/focus_ring"
+        android:alpha="0"
+        android:visibility="invisible" />
+
+    <TextView
+        android:id="@+id/freezeBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="14dp"
+        android:background="@drawable/bg_badge"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:text="ĐANG ĐÓNG BĂNG"
+        android:textColor="#FF1D1300"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <!-- Bảng cài đặt nhỏ ở trên -->
+    <ScrollView
+        android:id="@+id/panel"
+        android:layout_width="400dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:background="@drawable/bg_panel"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <TextView
+                    android:id="@+id/panelTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Cài đặt camera"
+                    android:textColor="#FFE9EDF2"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+                <ImageButton
+                    android:id="@+id/panelClose"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_btn"
+                    android:contentDescription="Đóng"
+                    android:src="@drawable/ic_close" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#FF8B95A3"
+                android:textSize="12sp" />
+
+            <TextView style="@style/PanelHead" android:text="HÌNH CHIẾU" />
+            <LinearLayout style="@style/PanelRow">
+                <Button android:id="@+id/btnFreeze" style="@style/PanelBtn" android:text="Đóng băng" />
+                <Button android:id="@+id/btnMirror" style="@style/PanelBtn" android:text="Lật gương" />
+                <Button android:id="@+id/btnTorch" style="@style/PanelBtn" android:text="Đèn" />
+            </LinearLayout>
+
+            <TextView style="@style/PanelHead" android:text="KHUNG HÌNH TRÊN TV" />
+            <LinearLayout style="@style/PanelRow">
+                <Button android:id="@+id/btnFit" style="@style/PanelBtn" android:text="Vừa màn hình" />
+                <Button android:id="@+id/btnFill" style="@style/PanelBtn" android:text="Lấp đầy" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/brightLabel"
+                style="@style/PanelHead"
+                android:text="ĐỘ SÁNG" />
+            <SeekBar
+                android:id="@+id/brightBar"
+                android:layout_width="match_parent"
+                android:layout_height="36dp" />
+
+            <Button
+                android:id="@+id/btnReset"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_reset"
+                android:text="Đặt lại cài đặt khuyên dùng"
+                android:textAllCaps="false"
+                android:textColor="#FF4CC2FF"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Thanh công cụ: Cài đặt, Đổi cam, Xoay, Chụp lưu ảnh -->
+    <LinearLayout
+        android:id="@+id/toolbar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_toolbar"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <ImageButton android:id="@+id/btnSettings" style="@style/ToolBtn" android:src="@drawable/ic_settings" android:contentDescription="Cài đặt" />
+        <ImageButton android:id="@+id/btnSwitch" style="@style/ToolBtn" android:src="@drawable/ic_switch" android:contentDescription="Đổi camera trước sau" />
+        <FrameLayout android:layout_width="wrap_content" android:layout_height="wrap_content">
+            <ImageButton android:id="@+id/btnRotate" style="@style/ToolBtn" android:src="@drawable/ic_rotate" android:contentDescription="Xoay" />
+            <TextView
+                android:id="@+id/rotLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="6dp"
+                android:layout_marginBottom="4dp"
+                android:text="0°"
+                android:textColor="#FFE9EDF2"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+        <ImageButton android:id="@+id/btnSave" style="@style/ToolBtn" android:src="@drawable/ic_save" android:contentDescription="Chụp lưu ảnh" />
+    </LinearLayout>
+
+    <!-- Nút tròn nhỏ: bấm để ẩn hết, chỉ còn hình camera; bấm lại để hiện. Kéo để đổi chỗ. -->
+    <ImageButton
+        android:id="@+id/btnHide"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="14dp"
+        android:background="@drawable/bg_round"
+        android:contentDescription="Ẩn hoặc hiện các nút"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_eye" />
+
+    <TextView
+        android:id="@+id/toast"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_toolbar"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textColor="#FFE9EDF2"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:alpha="0" />
+</FrameLayout>
