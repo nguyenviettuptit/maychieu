@@ -39,6 +39,7 @@
   #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; background: var(--bg); }
   #media { position: absolute; left: 50%; top: 50%; transform-origin: 50% 50%; will-change: transform; }
   #media video, #media canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #glView { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; z-index: 1; }
   #media canvas { z-index: 1; }
 
   /* Huy hiệu trạng thái */
@@ -145,6 +146,7 @@
     <video id="video" autoplay playsinline muted></video>
     <canvas id="freezeCanvas" hidden></canvas>
   </div>
+  <canvas id="glView" hidden></canvas>
 </div>
 
 <div class="badges" id="badges">
@@ -155,8 +157,9 @@
 
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
-  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.8</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
+  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.9</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
   <h2>Chất lượng hình</h2>
+  <p class="note" id="diag" style="color:var(--fg);opacity:.8"></p>
   <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
     <select id="camSelect"></select>
@@ -189,6 +192,9 @@
       <button type="button" id="pFreeze">Đóng băng hình</button>
       <button type="button" id="pMirror">Lật gương</button>
       <button type="button" id="pFlipV">Lật dọc</button>
+    </div>
+    <div class="seg">
+      <button type="button" id="pSharp">Làm nét chữ: Bật</button>
     </div>
   </div>
 
@@ -337,6 +343,103 @@
     srcW: 1280, srcH: 720
   };
   const ZMIN = 1, ZMAX = 8;
+
+  /* ---------- Hiển thị bằng GPU (WebGL) ----------
+     Thay vì để trình duyệt phóng to video (làm nhòe chữ), vẽ thẳng từng điểm ảnh màn hình từ khung camera,
+     kèm bộ làm nét chữ có giới hạn (không tạo viền sáng/tối quanh nét chữ). Mạnh dần khi phóng to. */
+  const glc = $("glView");
+  let gl = null, glU = {}, glTex = null, glActive = false, glDirty = true;
+  let freezeVer = 0, glFreezeVer = -1, glNewFrame = true, lastVT = -1, texW = 0, texH = 0, glFrames = 0, glT0 = performance.now();
+  state.sharp = store.get("sharp", true);
+  function initGL() {
+    try { gl = glc.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "high-performance" }); } catch { gl = null; }
+    if (!gl) return false;
+    const vs = "attribute vec2 a;varying vec2 p;uniform vec2 uStage;void main(){p=vec2(a.x*0.5*uStage.x,-a.y*0.5*uStage.y);gl_Position=vec4(a,0.0,1.0);}";
+    const fs = [
+      "precision highp float;varying vec2 p;uniform sampler2D t;",
+      "uniform vec2 uPan,uRot,uMir,uBox,uTexel;uniform float uZoom,uSharp;",
+      "void main(){",
+      " vec2 s=p-uPan;",
+      " vec2 r=vec2(s.x*uRot.x-s.y*uRot.y,s.x*uRot.y+s.y*uRot.x)/uZoom*uMir;",
+      " vec2 uv=r/uBox+0.5;",
+      " if(uv.x<0.0||uv.y<0.0||uv.x>1.0||uv.y>1.0){gl_FragColor=vec4(0.027,0.035,0.047,1.0);return;}",
+      " vec3 c=texture2D(t,uv).rgb;",
+      " if(uSharp>0.0){",
+      "  vec3 n=texture2D(t,uv+vec2(0.0,-uTexel.y)).rgb, so=texture2D(t,uv+vec2(0.0,uTexel.y)).rgb;",
+      "  vec3 e=texture2D(t,uv+vec2(uTexel.x,0.0)).rgb, w=texture2D(t,uv+vec2(-uTexel.x,0.0)).rgb;",
+      "  vec3 mn=min(c,min(min(n,so),min(e,w))), mx=max(c,max(max(n,so),max(e,w)));",
+      "  c=clamp(c+uSharp*(4.0*c-n-so-e-w),mn,mx);",
+      " }",
+      " gl_FragColor=vec4(c,1.0);",
+      "}"].join("\n");
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    try {
+      const pr = gl.createProgram();
+      gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error("link");
+      gl.useProgram(pr);
+      const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(pr, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      ["uStage", "uPan", "uRot", "uMir", "uBox", "uTexel", "uZoom", "uSharp"].forEach(n => glU[n] = gl.getUniformLocation(pr, n));
+      glTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, glTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    } catch (e) { gl = null; return false; }
+    glc.addEventListener("webglcontextlost", (ev) => { ev.preventDefault(); setGL(false); });
+    return true;
+  }
+  function setGL(on) {
+    glActive = on && !!gl;
+    glc.hidden = !glActive;
+    media.style.opacity = glActive ? "0" : "";
+    glDirty = true; glFreezeVer = -1; glNewFrame = true;
+  }
+  function glRender() {
+    const src = state.frozen ? freezeCanvas : video;
+    let upload = false;
+    if (state.frozen) { if (glFreezeVer !== freezeVer) { glFreezeVer = freezeVer; upload = true; } }
+    else if (video.readyState >= 2 && (glNewFrame || video.currentTime !== lastVT)) {
+      glNewFrame = false; lastVT = video.currentTime; upload = true; glFrames++;
+    }
+    const now = performance.now();
+    if (!state.frozen && now - glT0 >= 1000) { if (glFrames) state.realFps = Math.round(glFrames * 1000 / (now - glT0)); glFrames = 0; glT0 = now; }
+    if (!upload && !glDirty) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = Math.round(stage.clientWidth * dpr), ch = Math.round(stage.clientHeight * dpr);
+    if (glc.width !== cw || glc.height !== ch) { glc.width = cw; glc.height = ch; }
+    gl.viewport(0, 0, cw, ch);
+    if (upload) {
+      try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); } catch { return; }
+      texW = state.frozen ? freezeCanvas.width : video.videoWidth; texH = state.frozen ? freezeCanvas.height : video.videoHeight;
+    }
+    if (!texW) return;
+    const f = fitScale(), cz = cssZoom(), a = -state.rotation * Math.PI / 180;
+    const boxW = state.srcW * f, boxH = state.srcH * f;
+    // mức làm nét: theo số điểm màn hình trên 1 điểm ảnh camera (càng phóng to càng cần làm nét)
+    const up = (boxW * cz * dpr) / texW;
+    const amt = !state.sharp ? 0 : Math.max(0.2, Math.min(0.9, 0.2 + 0.35 * (up - 1)));
+    gl.uniform2f(glU.uStage, stage.clientWidth, stage.clientHeight);
+    gl.uniform2f(glU.uPan, state.panX, state.panY);
+    gl.uniform2f(glU.uRot, Math.cos(a), Math.sin(a));
+    gl.uniform2f(glU.uMir, state.mirror ? -1 : 1, state.flipV ? -1 : 1);
+    gl.uniform2f(glU.uBox, boxW, boxH);
+    gl.uniform2f(glU.uTexel, 1 / texW, 1 / texH);
+    gl.uniform1f(glU.uZoom, cz);
+    gl.uniform1f(glU.uSharp, amt);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    glDirty = false;
+  }
+  (function glLoop() {
+    requestAnimationFrame(glLoop);
+    if (glActive) glRender();
+  })();
+  // Báo có khung hình mới từ camera (đỡ phải tải lại hình khi camera chưa có khung mới)
+  (function watchFrames() {
+    if (!video.requestVideoFrameCallback) return;
+    const cb = () => { glNewFrame = true; video.requestVideoFrameCallback(cb); };
+    video.requestVideoFrameCallback(cb);
+  })();
 
   /* ---------- Thông báo ---------- */
   let toastT;
@@ -546,6 +649,11 @@
 
     const maxW = c.width && c.width.max, maxH = c.height && c.height.max;
     $("resNote").textContent = maxW ? `Camera hỗ trợ tối đa ${maxW}×${maxH}.` : "";
+    // Thông tin chẩn đoán: camera đang dùng, độ phân giải thật, lấy nét, zoom camera, hiển thị GPU
+    const zc = c.zoom && c.zoom.max > c.zoom.min ? `có (tới ${c.zoom.max}×)` : "không";
+    $("diag").textContent = `Đang dùng: ${state.track.label || "camera"} · ${s.width || video.videoWidth}×${s.height || video.videoHeight} · ` +
+      `${Math.round(s.frameRate || 0)} fps · lấy nét: ${s.focusMode || (modes.length ? modes.join("/") : "camera tự xử lý")} · ` +
+      `zoom camera: ${zc} · làm nét GPU: ${gl ? "có" : "không"}`;
   }
 
   /* Cài sẵn cho hình nét nhất:
@@ -713,6 +821,8 @@
       `translate(-50%,-50%) translate(${state.panX}px,${state.panY}px) rotate(${state.rotation}deg) scale(${cssZoom()}) scale(${state.mirror ? -1 : 1},${state.flipV ? -1 : 1})`;
     if (hwRange()) applyHwZoom(hwPart());
     media.style.filter = filterStr();
+    glc.style.filter = filterStr();
+    glDirty = true;
     $("zoomRange").value = state.zoom;
     $("zoomVal").textContent = state.zoom.toFixed(1) + "×";
     $("rotVal").textContent = state.rotation + "°";
@@ -911,6 +1021,7 @@
       if (!video.videoWidth) return;
       freezeCanvas.width = video.videoWidth; freezeCanvas.height = video.videoHeight;
       freezeCanvas.getContext("2d").drawImage(video, 0, 0);
+      freezeVer++;
       freezeCanvas.hidden = false;
     } else freezeCanvas.hidden = true;
     state.frozen = on;
@@ -959,6 +1070,7 @@
       if (sw <= vw) { bmp.close(); $("freezeBadge").textContent = "Đang đóng băng"; return; }  // ảnh không nét hơn video
       freezeCanvas.width = sw; freezeCanvas.height = sh;
       freezeCanvas.getContext("2d").drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+      freezeVer++; glDirty = true;
       bmp.close();
       $("freezeBadge").textContent = `Đóng băng · ảnh nét cao ${sw}×${sh}`;
     } catch {
@@ -1040,7 +1152,11 @@
     $("pFreeze").textContent = state.frozen ? "Tiếp tục hình" : "Đóng băng hình";
     $("pMirror").classList.toggle("on", state.mirror);
     $("pFlipV").classList.toggle("on", state.flipV);
+    $("pSharp").classList.toggle("on", state.sharp && glActive);
+    $("pSharp").textContent = !gl ? "Làm nét chữ: máy không hỗ trợ" : (state.sharp ? "Làm nét chữ: Bật" : "Làm nét chữ: Tắt");
+    $("pSharp").disabled = !gl;
   }
+  $("pSharp").onclick = () => { state.sharp = !state.sharp; store.set("sharp", state.sharp); glDirty = true; syncPanelBtns(); toast(state.sharp ? "Bật làm nét chữ" : "Tắt làm nét chữ"); };
   // Đặt lại toàn bộ về cài đặt khuyên dùng ban đầu
   $("resetAllBtn").onclick = async () => {
     const needRestart = state.res !== "auto" || state.fps !== 45;
@@ -1098,7 +1214,8 @@
   async function keepAwake() { try { if ("wakeLock" in navigator && document.visibilityState === "visible") wake = await navigator.wakeLock.request("screen"); } catch {} }
   document.addEventListener("visibilitychange", keepAwake);
 
-  setFit(state.fit); poke(); keepAwake(); startCamera();
+  setGL(initGL());
+  setFit(state.fit); syncPanelBtns(); poke(); keepAwake(); startCamera();
 
   /* ---------- Cài như ứng dụng (chỉ khi chạy trên web https, ví dụ GitHub Pages) ---------- */
   // Tự cập nhật: mỗi lần mở / quay lại app thì hỏi bản mới; có bản mới là tải lại trang 1 lần

@@ -1,6 +1,6 @@
 // Lưu ứng dụng vào bộ nhớ máy để mở được cả khi không có mạng.
 // Có mạng: luôn hỏi máy chủ bản mới nhất (bỏ qua bộ nhớ đệm 10 phút của GitHub Pages).
-const CACHE = "maychieu-v8";
+const CACHE = "maychieu-v9";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./icon-96.png"];
 
 const fresh = (url) => fetch(new Request(url, { cache: "no-cache", credentials: "same-origin" }));
