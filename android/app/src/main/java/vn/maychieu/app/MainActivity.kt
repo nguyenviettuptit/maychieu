@@ -3,7 +3,9 @@ package vn.maychieu.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -95,6 +97,19 @@ class MainActivity : ComponentActivity() {
     private var frozen = false
     private var uiHidden = false
 
+    /* Hướng màn hình của app (cũng là hướng hiện trên TV khi chiếu Smart View).
+       Khóa cứng theo nút bấm, không xoay theo cảm biến: lắc điện thoại không làm đổi hướng. */
+    private val orients = intArrayOf(
+        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+        ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE,
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+        ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+    )
+    private val orientNames = arrayOf("Ngang", "Ngang (lật ngược)", "Dọc", "Dọc (lật ngược)")
+    private val orientShort = arrayOf("Ngang", "Ngang ↻", "Dọc", "Dọc ↻")
+    private var orientIdx = 0
+    private var displayListener: DisplayManager.DisplayListener? = null
+
     // Hình đóng băng + phóng to / kéo trên hình đó
     private var frozenBitmap: Bitmap? = null
     private var fZoom = 1f
@@ -146,6 +161,18 @@ class MainActivity : ComponentActivity() {
         mirrored = prefs.getBoolean("mirror", false)
         fill = prefs.getBoolean("fill", false)
         lensFacing = prefs.getInt("lens", CameraSelector.LENS_FACING_BACK)
+        orientIdx = prefs.getInt("orient", 0).coerceIn(0, orients.size - 1)
+        requestedOrientation = orients[orientIdx]
+
+        // Lật 180° (ngang ↔ ngang ngược) không báo onConfigurationChanged → theo dõi màn hình để camera xoay đúng
+        val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) {}
+            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayChanged(displayId: Int) { updateTargetRotation() }
+        }
+        displayListener = listener
+        dm.registerDisplayListener(listener, null)
 
         setupButtons()
         setupGestures()
@@ -179,7 +206,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        displayListener?.let { (getSystemService(DISPLAY_SERVICE) as DisplayManager).unregisterDisplayListener(it) }
         worker.shutdown()
+    }
+
+    private fun updateTargetRotation() {
+        root.post {
+            val rot = previewView.display?.rotation ?: return@post
+            preview?.targetRotation = rot
+            imageCapture?.targetRotation = rot
+            applyTransform()
+        }
+    }
+
+    private fun setOrientation(idx: Int) {
+        orientIdx = idx % orients.size
+        prefs.edit().putInt("orient", orientIdx).apply()
+        requestedOrientation = orients[orientIdx]
+        rotLabel.text = orientShort[orientIdx]
     }
 
     /* ---------------- Camera ---------------- */
@@ -295,7 +339,8 @@ class MainActivity : ComponentActivity() {
         stage.scaleX = if (mirrored) -1f else 1f
         val st = if (fill) PreviewView.ScaleType.FILL_CENTER else PreviewView.ScaleType.FIT_CENTER
         if (previewView.scaleType != st) previewView.scaleType = st
-        rotLabel.text = "$rotationDeg°"
+        rotLabel.text = orientShort[orientIdx]
+        findViewById<Button>(R.id.btnRotImg).text = if (rotationDeg == 0) "Xoay hình 90°" else "Xoay hình 90° · đang $rotationDeg°"
 
         val maxPanel = (400 * resources.displayMetrics.density).toInt()
         val plp = panel.layoutParams as FrameLayout.LayoutParams
@@ -391,13 +436,13 @@ class MainActivity : ComponentActivity() {
         focusRing.y = rawY - loc[1] - focusRing.height / 2f
         focusRing.animate().cancel()
         if (!done) {
-            focusRing.background.setTint(0xFFFFB648.toInt())
+            focusRing.setBackgroundResource(R.drawable.focus_ring)
             focusRing.alpha = 1f
             focusRing.scaleX = 1.4f
             focusRing.scaleY = 1.4f
             focusRing.animate().scaleX(1f).scaleY(1f).setDuration(200).start()
         } else {
-            focusRing.background.setTint(if (ok) 0xFF6FDC9A.toInt() else 0xFFFFB648.toInt())
+            focusRing.setBackgroundResource(if (ok) R.drawable.focus_ring_ok else R.drawable.focus_ring)
             focusRing.animate().alpha(0f).setStartDelay(600).setDuration(300).start()
         }
     }
@@ -562,11 +607,17 @@ class MainActivity : ComponentActivity() {
             showToast(if (lensFacing == CameraSelector.LENS_FACING_BACK) "Camera sau" else "Camera trước")
         }
 
+        // Nút Xoay trên thanh công cụ: đổi hướng màn hình app (TV hiện theo) — không cần lắc điện thoại
         findViewById<ImageButton>(R.id.btnRotate).setOnClickListener {
+            setOrientation(orientIdx + 1)
+            showToast("Màn hình: ${orientNames[orientIdx]}")
+        }
+        // Trong Cài đặt: xoay riêng hình camera 90° (khi trang vở hiện bị nghiêng)
+        findViewById<Button>(R.id.btnRotImg).setOnClickListener {
             rotationDeg = (rotationDeg + 90) % 360
             prefs.edit().putInt("rotation", rotationDeg).apply()
             applyTransform()
-            showToast("Xoay $rotationDeg°")
+            showToast("Xoay hình $rotationDeg°")
         }
 
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { savePhoto() }
@@ -592,6 +643,7 @@ class MainActivity : ComponentActivity() {
 
         findViewById<Button>(R.id.btnReset).setOnClickListener {
             rotationDeg = 0; mirrored = false; fill = false; torchOn = false
+            setOrientation(0)   // về màn hình ngang (vừa TV)
             prefs.edit().putInt("rotation", 0).putBoolean("mirror", false).putBoolean("fill", false)
                 .putInt("exposure", 0).apply()
             setFrozen(false)
@@ -677,12 +729,7 @@ class MainActivity : ComponentActivity() {
         super.onConfigurationChanged(newConfig)
         btnHide.translationX = 0f
         btnHide.translationY = 0f
-        root.post {
-            val rot = previewView.display?.rotation ?: Surface.ROTATION_0
-            preview?.targetRotation = rot
-            imageCapture?.targetRotation = rot
-            applyTransform()
-        }
+        updateTargetRotation()
     }
 
     private fun showToast(msg: String, ms: Long = 1300) {
