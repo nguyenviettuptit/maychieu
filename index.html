@@ -155,7 +155,7 @@
 
 <div id="focusRing"></div>
 <div id="panel" hidden role="dialog" aria-label="Cài đặt camera">
-  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.7</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
+  <div class="phead"><b>Cài đặt camera <span style="color:var(--muted);font-weight:400">· bản 1.8</span></b><button type="button" id="panelClose" aria-label="Đóng">×</button></div>
   <h2>Chất lượng hình</h2>
   <div class="row" hidden>
     <label for="camSelect">Thiết bị đầu vào</label>
@@ -164,7 +164,7 @@
   <div class="row">
     <label for="resSelect">Độ phân giải yêu cầu</label>
     <select id="resSelect">
-      <option value="auto">Tự động theo máy (khuyên dùng)</option>
+      <option value="auto">Cao nhất mà vẫn mượt (khuyên dùng)</option>
       <option value="3840x2160">Cao nhất có thể (4K)</option>
       <option value="2560x1440">2K – 1440p</option>
       <option value="1920x1080">Full HD – 1080p</option>
@@ -236,7 +236,7 @@
   </div>
 
   <button type="button" class="resetAll" id="resetAllBtn">Đặt lại cài đặt khuyên dùng</button>
-  <p class="note" style="margin-top:-4px">Tự động độ phân giải · 30–45 fps · vừa màn hình · độ sáng, tương phản 100% · không xoay, không lật.</p>
+  <p class="note" style="margin-top:-4px">Độ phân giải cao nhất còn mượt · 30–45 fps · vừa màn hình · độ sáng, tương phản 100% · không xoay, không lật.</p>
 
   <h2 class="keysTitle">Phím tắt</h2>
   <div class="keys">
@@ -363,8 +363,13 @@
     const [w, h] = resolveRes().split("x").map(Number);
     // resizeMode "none": lấy đúng chế độ gốc của cảm biến, trình duyệt không co giãn lại (nét hơn)
     // advanced frameRate min 30: ưu tiên chế độ chạy được ≥30 fps (vd. webcam 4K chỉ 15 fps sẽ tự chọn 1080p 30 fps cho mượt)
+    // zoom: true xin quyền zoom của camera (zoom bằng cảm biến, nét như app camera thay vì phóng to ảnh)
+    const adv = [];
+    if (state.fps >= 30) adv.push({ frameRate: { min: 30 } });
+    adv.push({ focusMode: "continuous" });
     const base = { width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: state.fps, max: state.fps }, resizeMode: { ideal: "none" },
-                   advanced: state.fps >= 30 ? [{ frameRate: { min: 30 } }] : [] };
+                   zoom: true, advanced: adv };
+    hwCur = null;
     const tries = [];
     if (state.wantFacing) tries.push({ video: { ...base, facingMode: { exact: state.wantFacing } }, audio: false });
     else if (state.deviceId) tries.push({ video: { ...base, deviceId: { exact: state.deviceId } }, audio: false });
@@ -392,9 +397,43 @@
     $("msg").hidden = true;
     if (state.frozen) setFrozen(false);
     await listCameras();
+
+    // Điện thoại nhiều camera sau (chính, góc rộng, macro, xóa phông): chọn 1 lần camera nét nhất có tự lấy nét
+    const facing = (state.track.getSettings && state.track.getSettings().facingMode) || "";
+    if (isMobile && facing !== "user" && !store.get("bestBackDone3", false)) {
+      store.set("bestBackDone3", true);
+      const best = await pickBestBack();
+      if (best !== undefined) {           // đã thử các camera (luồng cũ đã tắt) → mở lại camera tốt nhất
+        if (best) { store.set("bestBack", best); state.deviceId = best; }
+        return startCamera();
+      }
+    }
+
     readCaps();
     updateInfo();
     layout();
+  }
+
+  // Thử lần lượt các camera sau: ưu tiên camera có tự lấy nét liên tục, rồi tới độ phân giải cảm biến lớn nhất
+  async function pickBestBack() {
+    const devs = (state.devices || []).filter(d => /back|rear|sau|environment/i.test(d.label));
+    if (devs.length < 2) return undefined;
+    showMsg("Đang chọn camera sau nét nhất…", "Chỉ làm 1 lần, mất vài giây.", false);
+    stopStream();
+    let best = null;
+    for (const d of devs) {
+      let s;
+      try { s = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: d.deviceId } }, audio: false }); } catch { continue; }
+      const t = s.getVideoTracks()[0];
+      const c = t.getCapabilities ? t.getCapabilities() : {};
+      s.getTracks().forEach(x => x.stop());
+      const px = ((c.width && c.width.max) || 0) * ((c.height && c.height.max) || 0);
+      const af = (c.focusMode || []).includes("continuous") ? 1 : 0;
+      const score = af * 1e9 + px;
+      if (!best || score > best.score) best = { id: d.deviceId, score };
+      await new Promise(r => setTimeout(r, 150));   // cho camera kịp nhả
+    }
+    return best ? best.id : null;
   }
 
   function handleErr(e) {
@@ -431,7 +470,10 @@
     try {
       const s = state.track && state.track.getSettings ? state.track.getSettings() : {};
       const devs = state.devices || [];
-      if (s.facingMode === "user" || s.facingMode === "environment") {
+      const bestBack = store.get("bestBack", "");
+      if (s.facingMode === "user" && bestBack) {
+        state.deviceId = bestBack;   // quay về đúng camera sau nét nhất đã chọn
+      } else if (s.facingMode === "user" || s.facingMode === "environment") {
         state.wantFacing = s.facingMode === "user" ? "environment" : "user";
         state.deviceId = "";
       } else if (devs.length > 1) {
@@ -452,7 +494,8 @@
   // Tự động: điện thoại/máy tính bảng dùng 1080p cho mát máy, máy tính dùng 4K nếu camera có
   const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
-  function resolveRes() { return state.res === "auto" ? (isMobile ? "1920x1080" : "3840x2160") : state.res; }
+  // Tự động: xin cao nhất (4K); kèm điều kiện ≥30 fps nên camera sẽ tự chọn độ phân giải cao nhất mà vẫn mượt
+  function resolveRes() { return state.res === "auto" ? "3840x2160" : state.res; }
 
   $("resSelect").value = state.res;
   $("resSelect").onchange = (e) => { state.res = e.target.value; store.set("res2", state.res); startCamera(); };
@@ -497,11 +540,9 @@
     $("focusBtn").hidden = !(modes.includes("continuous") || modes.includes("single-shot"));
     tuneForSharpness();
 
-    if (c.zoom && c.zoom.max > c.zoom.min) {
-      const r = $("hwZoomRange"); r.min = c.zoom.min; r.max = c.zoom.max; r.step = c.zoom.step || 0.1;
-      r.value = s.zoom != null ? s.zoom : c.zoom.min; $("hwZoomVal").textContent = Number(r.value).toFixed(1) + "×";
-      $("hwZoomRow").hidden = false;
-    } else $("hwZoomRow").hidden = true;
+    $("hwZoomRow").hidden = true;   // zoom phần cứng giờ tự dùng khi chụm 2 ngón
+    hwCur = s.zoom != null ? s.zoom : null;
+    if (hwRange()) applyHwZoom(hwPart());
 
     const maxW = c.width && c.width.max, maxH = c.height && c.height.max;
     $("resNote").textContent = maxW ? `Camera hỗ trợ tối đa ${maxW}×${maxH}.` : "";
@@ -537,7 +578,8 @@
     const r = stage.getBoundingClientRect(), f = fitScale();
     let sx = x - r.left - r.width / 2 - state.panX, sy = y - r.top - r.height / 2 - state.panY;
     const a = -state.rotation * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
-    let qx = (sx * cos - sy * sin) / state.zoom, qy = (sx * sin + sy * cos) / state.zoom;
+    const cz = cssZoom();
+    let qx = (sx * cos - sy * sin) / cz, qy = (sx * sin + sy * cos) / cz;
     if (state.mirror) qx = -qx; if (state.flipV) qy = -qy;
     return { u: qx / (state.srcW * f) + 0.5, v: qy / (state.srcH * f) + 0.5 };
   }
@@ -626,9 +668,38 @@
   $("fitContain").onclick = () => setFit("contain");
   $("fitCover").onclick = () => setFit("cover");
   $("fitBtn").onclick = () => { setFit(state.fit === "cover" ? "contain" : "cover"); toast(state.fit === "cover" ? "Lấp đầy màn hình" : "Vừa màn hình (đủ trang)"); };
+  /* Zoom 2 tầng:
+     - Tầng 1: zoom của chính camera (cắt từ cảm biến độ phân giải cao, nét như app camera) tới mức tối đa camera cho
+     - Tầng 2: phóng to ảnh trên màn hình phần còn lại (và khi đóng băng, phóng to trên ảnh chụp nét cao) */
+  let hwBusy = false, hwWant = null, hwCur = null;
+  function hwRange() {
+    const z = state.caps && state.caps.zoom;
+    return (z && typeof z.max === "number" && z.max > z.min && !state.frozen && state.track) ? z : null;
+  }
+  function hwPart() { const z = hwRange(); return z ? Math.max(z.min, Math.min(z.max, state.zoom)) : 1; }
+  function cssZoom() { return hwRange() ? Math.max(1, state.zoom / hwPart()) : state.zoom; }
+  function applyHwZoom(v) {
+    const z = hwRange(); if (!z) return;
+    const step = z.step || 0.1;
+    v = Math.round(v / step) * step;
+    if (hwCur !== null && Math.abs(v - hwCur) < step / 2 && hwWant === null) return;
+    hwWant = v;
+    if (hwBusy) return;
+    hwBusy = true;
+    (async () => {
+      while (hwWant !== null) {
+        const t = hwWant; hwWant = null;
+        if (hwCur !== null && Math.abs(t - hwCur) < step / 2) continue;
+        try { await state.track.applyConstraints({ advanced: [{ zoom: t }] }); } catch {}
+        hwCur = t;
+      }
+      hwBusy = false;
+    })();
+  }
+
   function clampPan() {
-    const f = fitScale(), rot90 = state.rotation % 180 !== 0;
-    const w = (rot90 ? state.srcH : state.srcW) * f * state.zoom, h = (rot90 ? state.srcW : state.srcH) * f * state.zoom;
+    const f = fitScale(), rot90 = state.rotation % 180 !== 0, cz = cssZoom();
+    const w = (rot90 ? state.srcH : state.srcW) * f * cz, h = (rot90 ? state.srcW : state.srcH) * f * cz;
     const mx = Math.max(0, (w - stage.clientWidth) / 2), my = Math.max(0, (h - stage.clientHeight) / 2);
     state.panX = Math.max(-mx, Math.min(mx, state.panX));
     state.panY = Math.max(-my, Math.min(my, state.panY));
@@ -639,7 +710,8 @@
     media.style.height = state.srcH * f + "px";
     clampPan();
     media.style.transform =
-      `translate(-50%,-50%) translate(${state.panX}px,${state.panY}px) rotate(${state.rotation}deg) scale(${state.zoom}) scale(${state.mirror ? -1 : 1},${state.flipV ? -1 : 1})`;
+      `translate(-50%,-50%) translate(${state.panX}px,${state.panY}px) rotate(${state.rotation}deg) scale(${cssZoom()}) scale(${state.mirror ? -1 : 1},${state.flipV ? -1 : 1})`;
+    if (hwRange()) applyHwZoom(hwPart());
     media.style.filter = filterStr();
     $("zoomRange").value = state.zoom;
     $("zoomVal").textContent = state.zoom.toFixed(1) + "×";
@@ -830,6 +902,11 @@
 
   /* ---------- Đóng băng ---------- */
   function setFrozen(on) {
+    // Giữ nguyên khung nhìn khi đóng băng / tiếp tục: phần zoom của camera đã nằm sẵn trong ảnh đóng băng
+    if (on && !state.frozen) { state.hwAtFreeze = hwPart(); state.zoom = cssZoom(); }
+    else if (!on && state.frozen && state.caps.zoom && state.caps.zoom.max > state.caps.zoom.min) {
+      state.zoom = Math.max(1, (state.hwAtFreeze || 1)); state.panX = state.panY = 0;
+    }
     if (on) {
       if (!video.videoWidth) return;
       freezeCanvas.width = video.videoWidth; freezeCanvas.height = video.videoHeight;
@@ -844,6 +921,7 @@
     $("freezeBadge").hidden = !on;
     $("freezeLbl").textContent = on ? "Tiếp tục" : "Đóng băng";
     $("freezeIcon").innerHTML = on ? '<path d="M7 5v14l12-7z"/>' : '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+    layout();
   }
   /* Khi đóng băng: chụp 1 ảnh tĩnh bằng chế độ CHỤP ẢNH của camera (độ phân giải đầy đủ của cảm biến,
      nét như app camera) rồi thay vào khung hình đóng băng. Chỉ hỗ trợ trên Chrome/Edge (Android, máy tính). */
