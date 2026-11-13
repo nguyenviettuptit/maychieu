@@ -2,10 +2,7 @@ package vn.maychieu.app
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
 import android.content.ContentValues
-import android.content.Intent
-import android.provider.Settings
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
@@ -225,20 +222,8 @@ class MainActivity : ComponentActivity() {
 
     /** Mở bảng chọn TV của điện thoại: ưu tiên Smart View (Samsung), rồi tới Cast của Android. */
     private fun openCast() {
-        val candidates = mutableListOf<Intent>()
-        packageManager.getLaunchIntentForPackage("com.samsung.android.smartmirroring")?.let { candidates += it }
-        candidates += Intent("android.settings.CAST_SETTINGS")
-        candidates += Intent(Settings.ACTION_WIRELESS_SETTINGS)
-        for (i in candidates) {
-            try {
-                startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                showToast("Chọn TV trong danh sách để chiếu", 2500)
-                return
-            } catch (_: ActivityNotFoundException) {
-            } catch (_: SecurityException) {
-            }
-        }
-        showToast("Vuốt 2 ngón từ trên xuống → bấm Smart View → chọn TV", 5000)
+        if (CastHelper.open(this)) showToast("Chọn TV trong danh sách để chiếu", 2500)
+        else showToast("Vuốt 2 ngón từ trên xuống → bấm Smart View → chọn TV", 5000)
     }
 
     /** Phát hiện TV đã kết nối (màn hình phụ) để đổi màu nút và gợi ý ẩn nút. */

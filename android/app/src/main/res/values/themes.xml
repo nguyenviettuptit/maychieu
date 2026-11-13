@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Màn hình camera: nền đen toàn màn hình -->
     <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/black</item>
         <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+
+    <!-- Màn hình chính: giao diện sáng -->
+    <style name="HomeTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/home_bg</item>
+        <item name="android:statusBarColor">@color/home_bg</item>
+        <item name="android:navigationBarColor">@color/home_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#FF2B5FE8</item>
     </style>
 </resources>
