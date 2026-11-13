@@ -12,6 +12,7 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -70,18 +71,27 @@ class CompareActivity : ComponentActivity() {
     /** Vẽ để khoanh vùng khác biệt khi đang so sánh 2 ảnh — không lưu lại, chỉ để xem/chiếu lên TV lúc này. */
     private fun setupDrawTool() {
         val btnEraser = findViewById<ImageButton>(R.id.btnCdEraser)
-        val penSizes = mapOf(R.id.cdSizeS to 4f, R.id.cdSizeM to 8f, R.id.cdSizeL to 16f)
-        val eraserSizes = mapOf(R.id.cdSizeS to 14f, R.id.cdSizeM to 26f, R.id.cdSizeL to 42f)
-        val sizeBtns = penSizes.keys.map { findViewById<Button>(it) }
-        var curSizeId = R.id.cdSizeM
+        val sizeBar = findViewById<SeekBar>(R.id.cdSizeBar)
+        // Bút và Tẩy có cỡ riêng, kéo thanh để chỉnh — tẩy mặc định to hơn hẳn cho dễ xóa
+        var penW = 8f
+        var eraserW = 26f
 
-        fun applySize(id: Int) {
-            curSizeId = id
-            val w = (if (compareDrawView.eraseMode) eraserSizes[id] else penSizes[id]) ?: return
-            if (compareDrawView.eraseMode) compareDrawView.eraserWidth = dpF(w) else compareDrawView.penWidth = dpF(w)
-            sizeBtns.forEach { it.isSelected = it.id == id }
+        fun applyWidth() {
+            if (compareDrawView.eraseMode) compareDrawView.eraserWidth = dpF(eraserW) else compareDrawView.penWidth = dpF(penW)
         }
-        sizeBtns.forEach { b -> b.setOnClickListener { applySize(b.id) } }
+        fun refreshBar() {
+            sizeBar.progress = ((if (compareDrawView.eraseMode) eraserW else penW) - 2f).toInt().coerceIn(0, sizeBar.max)
+        }
+        sizeBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                val w = (progress + 2).toFloat()
+                if (compareDrawView.eraseMode) eraserW = w else penW = w
+                applyWidth()
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
 
         val swatches = mapOf(
             R.id.cdSwBlack to 0xFF111827.toInt(), R.id.cdSwRed to 0xFFE5484D.toInt(),
@@ -92,7 +102,7 @@ class CompareActivity : ComponentActivity() {
             compareDrawView.color = c; compareDrawView.eraseMode = false
             swatchViews.forEach { it.isSelected = it.id == id }
             btnEraser.isSelected = false
-            applySize(curSizeId)
+            applyWidth(); refreshBar()
         }
         swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { selectColor(id, c) } }
 
@@ -100,11 +110,10 @@ class CompareActivity : ComponentActivity() {
             compareDrawView.eraseMode = !compareDrawView.eraseMode
             btnEraser.isSelected = compareDrawView.eraseMode
             if (compareDrawView.eraseMode) swatchViews.forEach { it.isSelected = false }
-            applySize(curSizeId)
+            applyWidth(); refreshBar()
         }
 
         selectColor(R.id.cdSwRed, 0xFFE5484D.toInt())
-        applySize(R.id.cdSizeM)
 
         findViewById<ImageButton>(R.id.btnCdUndo).setOnClickListener { compareDrawView.undo() }
         findViewById<ImageButton>(R.id.btnCdRedo).setOnClickListener { compareDrawView.redo() }

@@ -196,9 +196,23 @@
 
                 <View style="@style/ToolSep" />
 
-                <Button android:id="@+id/cdSizeS" style="@style/SizeBtn" android:text="Nhỏ" />
-                <Button android:id="@+id/cdSizeM" style="@style/SizeBtn" android:text="Vừa" />
-                <Button android:id="@+id/cdSizeL" style="@style/SizeBtn" android:text="To" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginEnd="2dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/dot_off" />
+                <SeekBar
+                    android:id="@+id/cdSizeBar"
+                    android:layout_width="130dp"
+                    android:layout_height="40dp"
+                    android:max="58" />
+                <ImageView
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="2dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/dot_off" />
 
                 <View style="@style/ToolSep" />
 
