@@ -22,7 +22,8 @@
             android:contentDescription="Quay lại"
             android:padding="8dp"
             android:rotation="180"
-            android:src="@drawable/ic_chevron" />
+            android:src="@drawable/ic_chevron"
+            android:tint="#FF334155" />
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"

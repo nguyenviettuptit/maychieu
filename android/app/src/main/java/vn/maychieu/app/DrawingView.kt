@@ -15,6 +15,9 @@ import android.view.View
 /**
  * Bảng vẽ: dùng để chú thích lên ảnh đã chụp (gọi setPhoto), hoặc vẽ đè lên hình camera / ảnh
  * đang hiện (không gọi setPhoto, nền trong suốt — hiện cả trên TV vì cùng màn hình đang cast).
+ *
+ * Ảnh nền và lớp nét vẽ TÁCH RIÊNG nhau: lớp nét vẽ luôn trong suốt ở chỗ chưa vẽ, nên khi tẩy
+ * (PorterDuff.CLEAR) chỉ xóa đúng nét bút đã vẽ trước đó, không bao giờ "xóa mất" ảnh nền.
  * Hoàn tác / làm lại: lưu danh sách nét vẽ rồi vẽ lại từ đầu mỗi lần hoàn tác — đơn giản, luôn đúng.
  * Bút và Tẩy có cỡ nét riêng (tẩy mặc định to hơn bút cho dễ tẩy).
  */
@@ -24,9 +27,9 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
 
     private val strokes = mutableListOf<Stroke>()
     private val redoStack = mutableListOf<Stroke>()
-    private var committed: Bitmap? = null
-    private var committedCanvas: Canvas? = null
-    private var baseBitmap: Bitmap? = null
+    private var annot: Bitmap? = null         // chỉ chứa nét vẽ (trong suốt ở chỗ chưa vẽ)
+    private var annotCanvas: Canvas? = null
+    private var baseBitmap: Bitmap? = null    // ảnh nền — không bao giờ bị tẩy mất, vẽ ở lớp riêng
 
     private var curPath: Path? = null
     private var curX = 0f
@@ -44,37 +47,39 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
         setLayerType(LAYER_TYPE_SOFTWARE, null)   // để chế độ tẩy (PorterDuff.CLEAR) luôn vẽ đúng
     }
 
-    /** Đặt ảnh nền để chỉnh sửa (ảnh được vẽ vừa khung, giữ nguyên tỉ lệ). */
+    /** Đặt ảnh nền để chỉnh sửa. Ảnh vẽ vừa khung, giữ nguyên tỉ lệ, tách riêng khỏi lớp nét vẽ. */
     fun setPhoto(bmp: Bitmap) {
         baseBitmap = bmp
-        rebuildCommitted()
         invalidate()   // bắt buộc: setPhoto gọi ngoài luồng vẽ bình thường nên phải tự báo vẽ lại
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w > 0 && h > 0) rebuildCommitted()
+        if (w > 0 && h > 0) rebuildAnnot()
     }
 
-    private fun ensureCommitted() {
+    private fun ensureAnnot() {
         if (width <= 0 || height <= 0) return
-        if (committed == null || committed!!.width != width || committed!!.height != height) rebuildCommitted()
+        if (annot == null || annot!!.width != width || annot!!.height != height) rebuildAnnot()
     }
 
-    private fun rebuildCommitted() {
+    private fun rebuildAnnot() {
         val w = width; val h = height
         if (w <= 0 || h <= 0) return
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        baseBitmap?.let { base ->
-            val scale = minOf(w.toFloat() / base.width, h.toFloat() / base.height)
-            val dw = base.width * scale; val dh = base.height * scale
-            val dst = RectF((w - dw) / 2f, (h - dh) / 2f, (w + dw) / 2f, (h + dh) / 2f)
-            c.drawBitmap(base, null, dst, Paint(Paint.FILTER_BITMAP_FLAG))
-        }
         strokes.forEach { drawStroke(c, it) }
-        committed = bmp
-        committedCanvas = c
+        annot = bmp
+        annotCanvas = c
+    }
+
+    /** Vẽ ảnh nền vừa khung (giữ tỉ lệ) lên 1 canvas bất kỳ — dùng cho cả hiện màn hình và xuất ảnh. */
+    private fun drawBase(c: Canvas, w: Int, h: Int) {
+        val base = baseBitmap ?: return
+        val scale = minOf(w.toFloat() / base.width, h.toFloat() / base.height)
+        val dw = base.width * scale; val dh = base.height * scale
+        val dst = RectF((w - dw) / 2f, (h - dh) / 2f, (w + dw) / 2f, (h + dh) / 2f)
+        c.drawBitmap(base, null, dst, Paint(Paint.FILTER_BITMAP_FLAG))
     }
 
     private fun paintFor(s: Stroke) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -89,7 +94,7 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
     private fun drawStroke(c: Canvas, s: Stroke) = c.drawPath(s.path, paintFor(s))
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        ensureCommitted()
+        ensureAnnot()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 curPath = Path().apply { moveTo(event.x, event.y) }
@@ -110,7 +115,7 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
                     p.lineTo(curX, curY)
                     val s = Stroke(p, color, activeWidth(), eraseMode)
                     strokes.add(s)
-                    committedCanvas?.let { drawStroke(it, s) }
+                    annotCanvas?.let { drawStroke(it, s) }
                     redoStack.clear()
                     onChanged?.invoke()
                 }
@@ -122,36 +127,42 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
     }
 
     override fun onDraw(canvas: Canvas) {
-        ensureCommitted()
-        committed?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+        ensureAnnot()
+        drawBase(canvas, width, height)
+        annot?.let { canvas.drawBitmap(it, 0f, 0f, null) }
         curPath?.let { canvas.drawPath(it, paintFor(Stroke(it, color, activeWidth(), eraseMode))) }
     }
 
     fun undo() {
         if (strokes.isEmpty()) return
         redoStack.add(strokes.removeAt(strokes.size - 1))
-        rebuildCommitted(); invalidate(); onChanged?.invoke()
+        rebuildAnnot(); invalidate(); onChanged?.invoke()
     }
 
     fun redo() {
         if (redoStack.isEmpty()) return
         strokes.add(redoStack.removeAt(redoStack.size - 1))
-        rebuildCommitted(); invalidate(); onChanged?.invoke()
+        rebuildAnnot(); invalidate(); onChanged?.invoke()
     }
 
     fun clearAll() {
         if (strokes.isEmpty()) return
         strokes.clear(); redoStack.clear()
-        rebuildCommitted(); invalidate(); onChanged?.invoke()
+        rebuildAnnot(); invalidate(); onChanged?.invoke()
     }
 
     fun canUndo() = strokes.isNotEmpty()
     fun canRedo() = redoStack.isNotEmpty()
     fun hasDrawing() = strokes.isNotEmpty()
 
-    /** Ảnh nền + toàn bộ nét vẽ, để lưu lại. */
+    /** Ảnh nền + toàn bộ nét vẽ, để lưu lại. Tẩy chỉ ảnh hưởng nét vẽ, ảnh nền luôn còn nguyên. */
     fun exportBitmap(): Bitmap {
-        ensureCommitted()
-        return committed?.copy(Bitmap.Config.ARGB_8888, false) ?: Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        ensureAnnot()
+        val w = width.coerceAtLeast(1); val h = height.coerceAtLeast(1)
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        drawBase(c, w, h)
+        annot?.let { c.drawBitmap(it, 0f, 0f, null) }
+        return out
     }
 }
