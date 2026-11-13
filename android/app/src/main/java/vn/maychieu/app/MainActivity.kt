@@ -2,7 +2,10 @@ package vn.maychieu.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.ContentValues
+import android.content.Intent
+import android.provider.Settings
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
@@ -167,8 +170,8 @@ class MainActivity : ComponentActivity() {
         // Lật 180° (ngang ↔ ngang ngược) không báo onConfigurationChanged → theo dõi màn hình để camera xoay đúng
         val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
         val listener = object : DisplayManager.DisplayListener {
-            override fun onDisplayAdded(displayId: Int) {}
-            override fun onDisplayRemoved(displayId: Int) {}
+            override fun onDisplayAdded(displayId: Int) { checkCast(true) }
+            override fun onDisplayRemoved(displayId: Int) { checkCast(true) }
             override fun onDisplayChanged(displayId: Int) { updateTargetRotation() }
         }
         displayListener = listener
@@ -193,6 +196,11 @@ class MainActivity : ComponentActivity() {
     private fun hasWritePermission() =
         ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
 
+    override fun onResume() {
+        super.onResume()
+        checkCast(true)   // quay lại app sau khi chọn TV: báo đã kết nối
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
@@ -208,6 +216,42 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         displayListener?.let { (getSystemService(DISPLAY_SERVICE) as DisplayManager).unregisterDisplayListener(it) }
         worker.shutdown()
+    }
+
+    /* ---------------- Chiếu lên TV (Smart View / Screen Cast có sẵn của điện thoại) ----------------
+       Không cần máy chủ: điện thoại gửi hình thẳng tới TV qua Wi-Fi (Miracast / Smart View). */
+
+    private var castConnected = false
+
+    /** Mở bảng chọn TV của điện thoại: ưu tiên Smart View (Samsung), rồi tới Cast của Android. */
+    private fun openCast() {
+        val candidates = mutableListOf<Intent>()
+        packageManager.getLaunchIntentForPackage("com.samsung.android.smartmirroring")?.let { candidates += it }
+        candidates += Intent("android.settings.CAST_SETTINGS")
+        candidates += Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        for (i in candidates) {
+            try {
+                startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                showToast("Chọn TV trong danh sách để chiếu", 2500)
+                return
+            } catch (_: ActivityNotFoundException) {
+            } catch (_: SecurityException) {
+            }
+        }
+        showToast("Vuốt 2 ngón từ trên xuống → bấm Smart View → chọn TV", 5000)
+    }
+
+    /** Phát hiện TV đã kết nối (màn hình phụ) để đổi màu nút và gợi ý ẩn nút. */
+    private fun checkCast(announce: Boolean) {
+        val dm = getSystemService(DISPLAY_SERVICE) as DisplayManager
+        val now = dm.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION).isNotEmpty()
+        if (now == castConnected) return
+        castConnected = now
+        findViewById<ImageButton>(R.id.btnCast).isSelected = now
+        if (announce) {
+            if (now) showToast("Đã chiếu lên TV · bấm nút con mắt để TV chỉ hiện hình", 4000)
+            else showToast("Đã ngắt chiếu TV", 2000)
+        }
     }
 
     private fun updateTargetRotation() {
@@ -621,6 +665,11 @@ class MainActivity : ComponentActivity() {
         }
 
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { savePhoto() }
+        findViewById<ImageButton>(R.id.btnCast).setOnClickListener {
+            if (castConnected) showToast("Đang chiếu lên TV · muốn ngắt: vuốt xuống, bấm Smart View → Ngắt kết nối", 4000)
+            else openCast()
+        }
+        checkCast(false)
 
         btnFreeze.setOnClickListener { setFrozen(!frozen) }
         btnMirror.setOnClickListener {

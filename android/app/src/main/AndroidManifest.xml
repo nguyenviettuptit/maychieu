@@ -10,6 +10,14 @@
 
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
 
+    <!-- Để mở được Smart View (chiếu màn hình) của Samsung -->
+    <queries>
+        <package android:name="com.samsung.android.smartmirroring" />
+        <intent>
+            <action android:name="android.settings.CAST_SETTINGS" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

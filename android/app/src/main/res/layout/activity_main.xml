@@ -168,6 +168,7 @@
                 android:textStyle="bold" />
         </FrameLayout>
         <ImageButton android:id="@+id/btnSave" style="@style/ToolBtn" android:src="@drawable/ic_save" android:contentDescription="Chụp lưu ảnh" />
+        <ImageButton android:id="@+id/btnCast" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_cast" android:contentDescription="Chiếu lên TV" />
     </LinearLayout>
 
     <!-- Nút tròn nhỏ: bấm để ẩn hết, chỉ còn hình camera; bấm lại để hiện. Kéo để đổi chỗ. -->
