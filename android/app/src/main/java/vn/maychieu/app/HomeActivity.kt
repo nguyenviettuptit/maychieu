@@ -5,6 +5,8 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -49,8 +51,17 @@ class HomeActivity : ComponentActivity() {
             }
         }
         findViewById<LinearLayout>(R.id.cardStart).setOnClickListener {
-            startActivity(Intent(this, MainActivity::class.java))
+            if (License.isActivated(this)) startActivity(Intent(this, MainActivity::class.java))
+            else showLicenseState()
         }
+
+        // Kích hoạt bản quyền
+        activateBtn = findViewById(R.id.activateBtn)
+        codeInput = findViewById(R.id.codeInput)
+        activateMsg = findViewById(R.id.activateMsg)
+        activateBtn.setOnClickListener { doActivate(codeInput.text.toString()) }
+        showLicenseState()
+        handleActivationLink(intent)
 
         val version = try {
             if (Build.VERSION.SDK_INT >= 33)
@@ -73,6 +84,59 @@ class HomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updateStatus()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleActivationLink(intent)
+    }
+
+    /* ---------- Kích hoạt ---------- */
+
+    private lateinit var activateBtn: Button
+    private lateinit var codeInput: EditText
+    private lateinit var activateMsg: TextView
+
+    /** Mở từ nút "Kích hoạt app" trên trang tải: maychieu://activate?t=MÃ → tự điền mã và kích hoạt. */
+    private fun handleActivationLink(i: Intent?) {
+        val data = i?.data ?: return
+        if (data.scheme != "maychieu") return
+        val code = data.getQueryParameter("t") ?: return
+        if (License.isActivated(this)) {
+            Toast.makeText(this, "Máy này đã được kích hoạt", Toast.LENGTH_SHORT).show()
+            return
+        }
+        codeInput.setText(code)
+        doActivate(code)
+    }
+
+    /** Chưa kích hoạt: hiện ô nhập mã, ẩn 2 nút. Đã kích hoạt: hiện 2 nút như bình thường. */
+    private fun showLicenseState() {
+        val ok = License.isActivated(this)
+        findViewById<View>(R.id.activateCard).visibility = if (ok) View.GONE else View.VISIBLE
+        cardConnect.visibility = if (ok) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.cardStart).visibility = if (ok) View.VISIBLE else View.GONE
+    }
+
+    private fun doActivate(code: String) {
+        activateBtn.isEnabled = false
+        activateBtn.text = "Đang kích hoạt…"
+        activateMsg.setTextColor(0xFF64748B.toInt())
+        activateMsg.text = ""
+        Thread {
+            val (ok, msg) = License.activate(this, code)
+            runOnUiThread {
+                activateBtn.isEnabled = true
+                activateBtn.text = "Kích hoạt"
+                if (ok) {
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    showLicenseState()
+                } else {
+                    activateMsg.setTextColor(0xFFE5484D.toInt())
+                    activateMsg.text = msg
+                }
+            }
+        }.start()
     }
 
     override fun onDestroy() {

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Chỉ xin quyền camera. Không dùng Internet, không micro, không vị trí. -->
+    <!-- Quyền camera. Internet chỉ dùng 1 lần khi kích hoạt bản quyền. Không micro, không vị trí. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Lưu ảnh trên Android 9 trở xuống (Android 10+ không cần quyền này) -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -32,6 +33,13 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Nút "Kích hoạt app" trên trang tải: maychieu://activate?t=MÃ -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="maychieu" android:host="activate" />
             </intent-filter>
         </activity>
 

@@ -124,6 +124,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!License.isActivated(this)) {   // chưa kích hoạt thì không cho vào màn hình chiếu
+            finish()
+            return
+        }
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // màn hình luôn sáng khi đang chiếu
         WindowCompat.setDecorFitsSystemWindows(window, false)
