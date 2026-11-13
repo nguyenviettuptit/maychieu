@@ -19,7 +19,7 @@ android {
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = "2.0." + (System.getenv("VERSION_CODE") ?: "1")
         // Máy chủ link bán / kích hoạt bản quyền
-        buildConfigField("String", "ACTIVATION_URL", "\"" + (System.getenv("ACTIVATION_URL") ?: "https://maychieu.nguyenviettuddh.workers.dev") + "\"")
+        buildConfigField("String", "ACTIVATION_URL", "\"" + (System.getenv("ACTIVATION_URL") ?: "https://maychieu.maychieuvnworkersdev.workers.dev") + "\"")
     }
 
     buildFeatures {
