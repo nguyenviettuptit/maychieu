@@ -54,6 +54,14 @@ class HomeActivity : ComponentActivity() {
             if (License.isActivated(this)) startActivity(Intent(this, MainActivity::class.java))
             else showLicenseState()
         }
+        findViewById<LinearLayout>(R.id.cardGallery).setOnClickListener {
+            if (License.isActivated(this)) startActivity(Intent(this, GalleryActivity::class.java))
+            else showLicenseState()
+        }
+        findViewById<LinearLayout>(R.id.cardCompare).setOnClickListener {
+            if (License.isActivated(this)) startActivity(Intent(this, CompareActivity::class.java))
+            else showLicenseState()
+        }
 
         // Kích hoạt bản quyền
         activateBtn = findViewById(R.id.activateBtn)
@@ -116,6 +124,8 @@ class HomeActivity : ComponentActivity() {
         findViewById<View>(R.id.activateCard).visibility = if (ok) View.GONE else View.VISIBLE
         cardConnect.visibility = if (ok) View.VISIBLE else View.GONE
         findViewById<View>(R.id.cardStart).visibility = if (ok) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.cardGallery).visibility = if (ok) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.cardCompare).visibility = if (ok) View.VISIBLE else View.GONE
     }
 
     private fun doActivate(code: String) {

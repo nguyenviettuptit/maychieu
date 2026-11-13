@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- So sánh bài: bước 1 chọn 2 ảnh (lưới giống Kho ảnh), bước 2 chia đôi màn hình để xem cạnh nhau. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000">
+
+    <!-- Bước 1: chọn 2 ảnh -->
+    <LinearLayout
+        android:id="@+id/pickContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FFF4F7FB"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFFFF"
+            android:elevation="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp">
+            <ImageButton
+                android:id="@+id/btnBackPick"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_btn"
+                android:contentDescription="Quay lại"
+                android:padding="8dp"
+                android:rotation="180"
+                android:src="@drawable/ic_chevron" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="Chọn 2 ảnh để so sánh"
+                android:textColor="#FF0F172A"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+            <Button
+                android:id="@+id/btnCompareGo"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_start"
+                android:enabled="false"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="So sánh (0/2)"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFFFF" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+                <LinearLayout
+                    android:id="@+id/pickRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="10dp" />
+            </ScrollView>
+            <TextView
+                android:id="@+id/pickEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:padding="32dp"
+                android:text="Chưa có ảnh nào trong Kho ảnh."
+                android:textColor="#FF94A3B8"
+                android:visibility="gone" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- Bước 2: chia đôi màn hình -->
+    <FrameLayout
+        android:id="@+id/viewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="#FF000000">
+                <ImageView
+                    android:id="@+id/imgLeft"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Ảnh 1" />
+                <TextView
+                    android:id="@+id/nameLeft"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top"
+                    android:background="#99000000"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <View
+                android:layout_width="2dp"
+                android:layout_height="match_parent"
+                android:background="#55FFFFFF" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="#FF000000">
+                <ImageView
+                    android:id="@+id/imgRight"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="Ảnh 2" />
+                <TextView
+                    android:id="@+id/nameRight"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top"
+                    android:background="#99000000"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnBackCompare"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="top|start"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_round"
+            android:contentDescription="Chọn lại"
+            android:padding="10dp"
+            android:src="@drawable/ic_close" />
+    </FrameLayout>
+</FrameLayout>

@@ -27,6 +27,13 @@
             android:scaleType="matrix"
             android:visibility="gone"
             android:contentDescription="Hình đóng băng" />
+
+        <!-- Vẽ trực tiếp lên hình đang chiếu (hiện cả trên TV); bật bằng nút Vẽ ở thanh công cụ -->
+        <vn.maychieu.app.DrawingView
+            android:id="@+id/liveDrawView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
     </FrameLayout>
 
     <View
@@ -168,8 +175,61 @@
                 android:textStyle="bold" />
         </FrameLayout>
         <ImageButton android:id="@+id/btnSave" style="@style/ToolBtn" android:src="@drawable/ic_save" android:contentDescription="Chụp lưu ảnh" />
+        <ImageButton android:id="@+id/btnDraw" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_pen" android:contentDescription="Vẽ lên hình" />
         <ImageButton android:id="@+id/btnCast" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_cast" android:contentDescription="Chiếu lên TV" />
     </LinearLayout>
+
+    <!-- Thanh công cụ vẽ trực tiếp: hiện thay cho thanh công cụ chính khi đang bật Vẽ -->
+    <HorizontalScrollView
+        android:id="@+id/drawToolbar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="18dp"
+        android:background="@drawable/bg_toolbar"
+        android:scrollbars="none"
+        android:visibility="gone">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="6dp">
+
+            <View android:id="@+id/lswBlack" style="@style/Swatch" android:background="@drawable/swatch_black" />
+            <View android:id="@+id/lswRed" style="@style/Swatch" android:background="@drawable/swatch_red" />
+            <View android:id="@+id/lswBlue" style="@style/Swatch" android:background="@drawable/swatch_blue" />
+            <View android:id="@+id/lswGreen" style="@style/Swatch" android:background="@drawable/swatch_green" />
+            <View android:id="@+id/lswYellow" style="@style/Swatch" android:background="@drawable/swatch_yellow" />
+
+            <View style="@style/ToolSep" />
+
+            <Button android:id="@+id/lsizeS" style="@style/SizeBtn" android:text="Nhỏ" />
+            <Button android:id="@+id/lsizeM" style="@style/SizeBtn" android:text="Vừa" />
+            <Button android:id="@+id/lsizeL" style="@style/SizeBtn" android:text="To" />
+
+            <View style="@style/ToolSep" />
+
+            <ImageButton android:id="@+id/btnLiveEraser" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_eraser" android:contentDescription="Tẩy" />
+            <ImageButton android:id="@+id/btnLiveUndo" style="@style/ToolBtn" android:src="@drawable/ic_undo" android:contentDescription="Hoàn tác" />
+            <ImageButton android:id="@+id/btnLiveRedo" style="@style/ToolBtn" android:src="@drawable/ic_redo" android:contentDescription="Làm lại" />
+            <ImageButton android:id="@+id/btnLiveClear" style="@style/ToolBtn" android:src="@drawable/ic_trash" android:contentDescription="Xóa hết" />
+
+            <View style="@style/ToolSep" />
+
+            <Button
+                android:id="@+id/btnDrawDone"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_start"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Xong"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFFFF"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </HorizontalScrollView>
 
     <!-- Nút tròn nhỏ: bấm để ẩn hết, chỉ còn hình camera; bấm lại để hiện. Kéo để đổi chỗ. -->
     <ImageButton

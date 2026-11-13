@@ -3,6 +3,7 @@ package vn.maychieu.app
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
@@ -46,6 +47,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,6 +84,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var btnTorch: Button
     private lateinit var btnFit: Button
     private lateinit var btnFill: Button
+    private lateinit var liveDrawView: DrawingView
+    private lateinit var drawToolbar: View
+    private var drawModeOn = false
 
     private var provider: ProcessCameraProvider? = null
     private var camera: Camera? = null
@@ -157,6 +163,8 @@ class MainActivity : ComponentActivity() {
         btnTorch = findViewById(R.id.btnTorch)
         btnFit = findViewById(R.id.btnFit)
         btnFill = findViewById(R.id.btnFill)
+        liveDrawView = findViewById(R.id.liveDrawView)
+        drawToolbar = findViewById(R.id.drawToolbar)
 
         // TextureView: cho phép xoay / lật hình bằng phép biến đổi khung
         previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -181,6 +189,7 @@ class MainActivity : ComponentActivity() {
         setupButtons()
         setupGestures()
         setupHideButton()
+        setupDrawTool()
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyTransform() }
 
         if (hasCameraPermission() && (Build.VERSION.SDK_INT > 28 || hasWritePermission())) startCamera()
@@ -581,18 +590,82 @@ class MainActivity : ComponentActivity() {
         updateFrozenMatrix()
     }
 
+    /* ---------------- Vẽ trực tiếp lên hình đang chiếu (hiện cả trên TV) ----------------
+       Chỉ để hiển thị khi đang giảng bài (như con trỏ / khoanh vùng), không lưu vào ảnh chụp
+       để tránh sai góc khi đang xoay/lật hình. Muốn lưu chú thích: dùng bút ở màn hình
+       chỉnh sửa hiện ra ngay sau khi bấm Chụp. */
+
+    private fun dp(v: Float) = v * resources.displayMetrics.density
+
+    private fun setupDrawTool() {
+        liveDrawView.strokeWidth = dp(8f)
+
+        val swatches = mapOf(
+            R.id.lswBlack to 0xFF111827.toInt(), R.id.lswRed to 0xFFE5484D.toInt(),
+            R.id.lswBlue to 0xFF2B5FE8.toInt(), R.id.lswGreen to 0xFF22B566.toInt(), R.id.lswYellow to 0xFFF5B400.toInt()
+        )
+        val swatchViews = swatches.keys.map { findViewById<View>(it) }
+        fun selectColor(id: Int, c: Int) {
+            liveDrawView.color = c; liveDrawView.eraseMode = false
+            swatchViews.forEach { it.isSelected = it.id == id }
+            findViewById<ImageButton>(R.id.btnLiveEraser).isSelected = false
+        }
+        swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { selectColor(id, c) } }
+        selectColor(R.id.lswRed, 0xFFE5484D.toInt())
+
+        val sizes = mapOf(R.id.lsizeS to 4f, R.id.lsizeM to 8f, R.id.lsizeL to 16f)
+        val sizeBtns = sizes.keys.map { findViewById<Button>(it) }
+        fun selectSize(id: Int, w: Float) {
+            liveDrawView.strokeWidth = dp(w)
+            sizeBtns.forEach { it.isSelected = it.id == id }
+        }
+        sizes.forEach { (id, w) -> findViewById<Button>(id).setOnClickListener { selectSize(id, w) } }
+        selectSize(R.id.lsizeM, 8f)
+
+        findViewById<ImageButton>(R.id.btnLiveEraser).setOnClickListener {
+            liveDrawView.eraseMode = !liveDrawView.eraseMode
+            it.isSelected = liveDrawView.eraseMode
+        }
+        findViewById<ImageButton>(R.id.btnLiveUndo).setOnClickListener { liveDrawView.undo() }
+        findViewById<ImageButton>(R.id.btnLiveRedo).setOnClickListener { liveDrawView.redo() }
+        findViewById<ImageButton>(R.id.btnLiveClear).setOnClickListener { liveDrawView.clearAll() }
+        findViewById<Button>(R.id.btnDrawDone).setOnClickListener { setDrawMode(false) }
+    }
+
+    private fun setDrawMode(on: Boolean) {
+        drawModeOn = on
+        liveDrawView.visibility = if (on) View.VISIBLE else View.GONE
+        toolbar.visibility = if (on) View.GONE else View.VISIBLE
+        drawToolbar.visibility = if (on) View.VISIBLE else View.GONE
+        findViewById<ImageButton>(R.id.btnDraw).isSelected = on
+        if (on) showPanel(false)
+    }
+
     /* ---------------- Lưu ảnh ---------------- */
 
     private fun savePhoto() {
-        val name = "MayChieu_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val current = frozenBitmap
         if (frozen && current != null) {
-            saveBitmap(current, name)
+            openEditorWith(current)
             return
         }
         showToast("Đang chụp…")
         captureBitmap { bmp ->
-            if (bmp == null) showToast("Không chụp được ảnh") else saveBitmap(bmp, name)
+            if (bmp == null) showToast("Không chụp được ảnh") else openEditorWith(bmp)
+        }
+    }
+
+    /** Mở màn hình chỉnh sửa (vẽ chú thích) với ảnh vừa chụp; Lưu ở đó sẽ hỏi tên rồi thêm vào Kho ảnh. */
+    private fun openEditorWith(bmp: Bitmap) {
+        try {
+            val f = File(cacheDir, "tmp_edit_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+            startActivity(Intent(this, PhotoEditorActivity::class.java).apply {
+                putExtra(PhotoEditorActivity.EXTRA_MODE, PhotoEditorActivity.MODE_NEW)
+                putExtra(PhotoEditorActivity.EXTRA_PATH, f.absolutePath)
+            })
+        } catch (e: Exception) {
+            showToast("Không mở được màn hình chỉnh sửa")
         }
     }
 
@@ -654,6 +727,7 @@ class MainActivity : ComponentActivity() {
         }
 
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { savePhoto() }
+        findViewById<ImageButton>(R.id.btnDraw).setOnClickListener { setDrawMode(!drawModeOn) }
         findViewById<ImageButton>(R.id.btnCast).setOnClickListener {
             if (castConnected) showToast("Đang chiếu lên TV · muốn ngắt: vuốt xuống, bấm Smart View → Ngắt kết nối", 4000)
             else openCast()

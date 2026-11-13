@@ -49,5 +49,26 @@
             android:exported="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- Chỉnh sửa ảnh: vẽ chú thích lên ảnh vừa chụp hoặc ảnh trong Kho ảnh -->
+        <activity
+            android:name=".PhotoEditorActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- Kho ảnh: danh sách ảnh đã lưu -->
+        <activity
+            android:name=".GalleryActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+
+        <!-- So sánh bài tập: chọn 2 ảnh, chia đôi màn hình -->
+        <activity
+            android:name=".CompareActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
     </application>
 </manifest>

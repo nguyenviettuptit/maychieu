@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chỉnh sửa ảnh: bảng vẽ toàn màn hình, thanh trên (đóng/tiêu đề/lưu), thanh dưới (công cụ vẽ). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000">
+
+    <vn.maychieu.app.DrawingView
+        android:id="@+id/drawView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#CC000000"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+        <ImageButton
+            android:id="@+id/btnClose"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_icon_btn"
+            android:contentDescription="Đóng"
+            android:padding="10dp"
+            android:src="@drawable/ic_close" />
+        <TextView
+            android:id="@+id/editorTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Chỉnh sửa ảnh"
+            android:textColor="#FFFFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+        <Button
+            android:id="@+id/btnSaveEdit"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_start"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:text="Lưu"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFFFF"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#CC000000"
+        android:scrollbars="none">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <View android:id="@+id/swBlack" style="@style/Swatch" android:background="@drawable/swatch_black" />
+            <View android:id="@+id/swRed" style="@style/Swatch" android:background="@drawable/swatch_red" />
+            <View android:id="@+id/swBlue" style="@style/Swatch" android:background="@drawable/swatch_blue" />
+            <View android:id="@+id/swGreen" style="@style/Swatch" android:background="@drawable/swatch_green" />
+            <View android:id="@+id/swYellow" style="@style/Swatch" android:background="@drawable/swatch_yellow" />
+
+            <View style="@style/ToolSep" />
+
+            <Button android:id="@+id/sizeS" style="@style/SizeBtn" android:text="Nhỏ" />
+            <Button android:id="@+id/sizeM" style="@style/SizeBtn" android:text="Vừa" />
+            <Button android:id="@+id/sizeL" style="@style/SizeBtn" android:text="To" />
+
+            <View style="@style/ToolSep" />
+
+            <ImageButton android:id="@+id/btnEraser" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_eraser" android:contentDescription="Tẩy" />
+            <ImageButton android:id="@+id/btnUndo" style="@style/ToolBtn" android:src="@drawable/ic_undo" android:contentDescription="Hoàn tác" />
+            <ImageButton android:id="@+id/btnRedo" style="@style/ToolBtn" android:src="@drawable/ic_redo" android:contentDescription="Làm lại" />
+            <ImageButton android:id="@+id/btnClearAll" style="@style/ToolBtn" android:src="@drawable/ic_trash" android:contentDescription="Xóa hết" />
+        </LinearLayout>
+    </HorizontalScrollView>
+</FrameLayout>
