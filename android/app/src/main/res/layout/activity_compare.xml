@@ -99,7 +99,7 @@
                     android:id="@+id/imgLeft"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:scaleType="fitCenter"
+                    android:scaleType="matrix"
                     android:contentDescription="Ảnh 1" />
                 <TextView
                     android:id="@+id/nameLeft"
@@ -127,7 +127,7 @@
                     android:id="@+id/imgRight"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:scaleType="fitCenter"
+                    android:scaleType="matrix"
                     android:contentDescription="Ảnh 2" />
                 <TextView
                     android:id="@+id/nameRight"
@@ -142,6 +142,13 @@
             </FrameLayout>
         </LinearLayout>
 
+        <!-- Vẽ để chỉ ra chỗ khác nhau giữa 2 bài; bật bằng nút bút ở góc trên -->
+        <vn.maychieu.app.DrawingView
+            android:id="@+id/compareDrawView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
         <ImageButton
             android:id="@+id/btnBackCompare"
             android:layout_width="44dp"
@@ -152,5 +159,67 @@
             android:contentDescription="Chọn lại"
             android:padding="10dp"
             android:src="@drawable/ic_close" />
+
+        <ImageButton
+            android:id="@+id/btnComparePen"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_round"
+            android:contentDescription="Vẽ để so sánh"
+            android:padding="10dp"
+            android:src="@drawable/ic_pen" />
+
+        <HorizontalScrollView
+            android:id="@+id/compareDrawToolbar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_toolbar"
+            android:scrollbars="none"
+            android:visibility="gone">
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="6dp">
+
+                <View android:id="@+id/cdSwBlack" style="@style/Swatch" android:background="@drawable/swatch_black" />
+                <View android:id="@+id/cdSwRed" style="@style/Swatch" android:background="@drawable/swatch_red" />
+                <View android:id="@+id/cdSwBlue" style="@style/Swatch" android:background="@drawable/swatch_blue" />
+                <View android:id="@+id/cdSwGreen" style="@style/Swatch" android:background="@drawable/swatch_green" />
+                <View android:id="@+id/cdSwYellow" style="@style/Swatch" android:background="@drawable/swatch_yellow" />
+
+                <View style="@style/ToolSep" />
+
+                <Button android:id="@+id/cdSizeS" style="@style/SizeBtn" android:text="Nhỏ" />
+                <Button android:id="@+id/cdSizeM" style="@style/SizeBtn" android:text="Vừa" />
+                <Button android:id="@+id/cdSizeL" style="@style/SizeBtn" android:text="To" />
+
+                <View style="@style/ToolSep" />
+
+                <ImageButton android:id="@+id/btnCdEraser" style="@style/ToolBtn" android:background="@drawable/bg_btn_tool" android:src="@drawable/ic_eraser" android:contentDescription="Tẩy" />
+                <ImageButton android:id="@+id/btnCdUndo" style="@style/ToolBtn" android:src="@drawable/ic_undo" android:contentDescription="Hoàn tác" />
+                <ImageButton android:id="@+id/btnCdRedo" style="@style/ToolBtn" android:src="@drawable/ic_redo" android:contentDescription="Làm lại" />
+                <ImageButton android:id="@+id/btnCdClear" style="@style/ToolBtn" android:src="@drawable/ic_trash" android:contentDescription="Xóa hết" />
+
+                <View style="@style/ToolSep" />
+
+                <Button
+                    android:id="@+id/btnCdDone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:background="@drawable/bg_start"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:text="Xong"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFFFF"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </HorizontalScrollView>
     </FrameLayout>
 </FrameLayout>

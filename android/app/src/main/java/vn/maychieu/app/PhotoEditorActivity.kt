@@ -61,11 +61,6 @@ class PhotoEditorActivity : ComponentActivity() {
         findViewById<Button>(R.id.btnSaveEdit).setOnClickListener { onSaveClicked() }
 
         setupColorAndSize()
-
-        findViewById<ImageButton>(R.id.btnEraser).setOnClickListener {
-            drawView.eraseMode = !drawView.eraseMode
-            it.isSelected = drawView.eraseMode
-        }
         findViewById<ImageButton>(R.id.btnUndo).setOnClickListener { drawView.undo() }
         findViewById<ImageButton>(R.id.btnRedo).setOnClickListener { drawView.redo() }
         findViewById<ImageButton>(R.id.btnClearAll).setOnClickListener {
@@ -79,28 +74,44 @@ class PhotoEditorActivity : ComponentActivity() {
     }
 
     private fun setupColorAndSize() {
+        val dm = resources.displayMetrics
+        val btnEraser = findViewById<ImageButton>(R.id.btnEraser)
+        // Bút và Tẩy có cỡ riêng — tẩy mặc định to hơn hẳn cho dễ xóa
+        val penSizes = mapOf(R.id.sizeS to 4f, R.id.sizeM to 9f, R.id.sizeL to 18f)
+        val eraserSizes = mapOf(R.id.sizeS to 14f, R.id.sizeM to 26f, R.id.sizeL to 42f)
+        val sizeBtns = penSizes.keys.map { findViewById<Button>(it) }
+        var curSizeId = R.id.sizeM
+
+        fun applySize(id: Int) {
+            curSizeId = id
+            val w = (if (drawView.eraseMode) eraserSizes[id] else penSizes[id]) ?: return
+            if (drawView.eraseMode) drawView.eraserWidth = w * dm.density else drawView.penWidth = w * dm.density
+            sizeBtns.forEach { it.isSelected = it.id == id }
+        }
+        sizeBtns.forEach { b -> b.setOnClickListener { applySize(b.id) } }
+
         val swatches = mapOf(
             R.id.swBlack to 0xFF111827.toInt(), R.id.swRed to 0xFFE5484D.toInt(),
             R.id.swBlue to 0xFF2B5FE8.toInt(), R.id.swGreen to 0xFF22B566.toInt(), R.id.swYellow to 0xFFF5B400.toInt()
         )
-        val views = swatches.keys.map { findViewById<View>(it) }
-        fun pick(id: Int, c: Int) {
+        val swatchViews = swatches.keys.map { findViewById<View>(it) }
+        fun pickColor(id: Int, c: Int) {
             drawView.color = c; drawView.eraseMode = false
-            views.forEach { it.isSelected = it.id == id }
-            findViewById<ImageButton>(R.id.btnEraser).isSelected = false
+            swatchViews.forEach { it.isSelected = it.id == id }
+            btnEraser.isSelected = false
+            applySize(curSizeId)
         }
-        swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { pick(id, c) } }
-        pick(R.id.swRed, 0xFFE5484D.toInt())
+        swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { pickColor(id, c) } }
 
-        val dm = resources.displayMetrics
-        val sizes = mapOf(R.id.sizeS to 4f, R.id.sizeM to 9f, R.id.sizeL to 18f)
-        val sizeBtns = sizes.keys.map { findViewById<Button>(it) }
-        fun pickSize(id: Int, w: Float) {
-            drawView.strokeWidth = w * dm.density
-            sizeBtns.forEach { it.isSelected = it.id == id }
+        btnEraser.setOnClickListener {
+            drawView.eraseMode = !drawView.eraseMode
+            btnEraser.isSelected = drawView.eraseMode
+            if (drawView.eraseMode) swatchViews.forEach { it.isSelected = false }
+            applySize(curSizeId)
         }
-        sizes.forEach { (id, w) -> findViewById<Button>(id).setOnClickListener { pickSize(id, w) } }
-        pickSize(R.id.sizeM, 9f)
+
+        pickColor(R.id.swRed, 0xFFE5484D.toInt())
+        applySize(R.id.sizeM)
     }
 
     private fun onSaveClicked() {

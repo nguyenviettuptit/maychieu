@@ -13,9 +13,10 @@ import android.view.MotionEvent
 import android.view.View
 
 /**
- * Bảng vẽ: dùng để chú thích lên ảnh đã chụp (gọi setPhoto), hoặc vẽ đè lên hình camera
- * đang chiếu (không gọi setPhoto, nền trong suốt — hiện cả trên TV vì cùng màn hình đang cast).
+ * Bảng vẽ: dùng để chú thích lên ảnh đã chụp (gọi setPhoto), hoặc vẽ đè lên hình camera / ảnh
+ * đang hiện (không gọi setPhoto, nền trong suốt — hiện cả trên TV vì cùng màn hình đang cast).
  * Hoàn tác / làm lại: lưu danh sách nét vẽ rồi vẽ lại từ đầu mỗi lần hoàn tác — đơn giản, luôn đúng.
+ * Bút và Tẩy có cỡ nét riêng (tẩy mặc định to hơn bút cho dễ tẩy).
  */
 class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
@@ -32,9 +33,12 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
     private var curY = 0f
 
     var color: Int = 0xFFE5484D.toInt()
-    var strokeWidth: Float = 10f
+    var penWidth: Float = 10f
+    var eraserWidth: Float = 26f
     var eraseMode: Boolean = false
     var onChanged: (() -> Unit)? = null
+
+    private fun activeWidth() = if (eraseMode) eraserWidth else penWidth
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null)   // để chế độ tẩy (PorterDuff.CLEAR) luôn vẽ đúng
@@ -44,6 +48,7 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
     fun setPhoto(bmp: Bitmap) {
         baseBitmap = bmp
         rebuildCommitted()
+        invalidate()   // bắt buộc: setPhoto gọi ngoài luồng vẽ bình thường nên phải tự báo vẽ lại
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -103,7 +108,7 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
                 val p = curPath
                 if (p != null) {
                     p.lineTo(curX, curY)
-                    val s = Stroke(p, color, strokeWidth, eraseMode)
+                    val s = Stroke(p, color, activeWidth(), eraseMode)
                     strokes.add(s)
                     committedCanvas?.let { drawStroke(it, s) }
                     redoStack.clear()
@@ -119,7 +124,7 @@ class DrawingView(context: Context, attrs: AttributeSet? = null) : View(context,
     override fun onDraw(canvas: Canvas) {
         ensureCommitted()
         committed?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-        curPath?.let { canvas.drawPath(it, paintFor(Stroke(it, color, strokeWidth, eraseMode))) }
+        curPath?.let { canvas.drawPath(it, paintFor(Stroke(it, color, activeWidth(), eraseMode))) }
     }
 
     fun undo() {

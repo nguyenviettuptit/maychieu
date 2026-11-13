@@ -28,6 +28,11 @@ class CompareActivity : ComponentActivity() {
     private lateinit var pickRows: LinearLayout
     private lateinit var pickEmpty: TextView
     private lateinit var btnGo: Button
+    private lateinit var zoomLeft: ImageZoomPan
+    private lateinit var zoomRight: ImageZoomPan
+    private lateinit var compareDrawView: DrawingView
+    private lateinit var compareDrawToolbar: View
+    private var drawModeOn = false
     private val selectedOrder = mutableListOf<String>()   // tối đa 2, theo thứ tự chọn
     private val cols = 4
 
@@ -46,11 +51,73 @@ class CompareActivity : ComponentActivity() {
         pickEmpty = findViewById(R.id.pickEmpty)
         btnGo = findViewById(R.id.btnCompareGo)
 
+        zoomLeft = ImageZoomPan(this, findViewById(R.id.imgLeft)).apply { attachGestures() }
+        zoomRight = ImageZoomPan(this, findViewById(R.id.imgRight)).apply { attachGestures() }
+        compareDrawView = findViewById(R.id.compareDrawView)
+        compareDrawToolbar = findViewById(R.id.compareDrawToolbar)
+
         findViewById<ImageButton>(R.id.btnBackPick).setOnClickListener { finish() }
         findViewById<ImageButton>(R.id.btnBackCompare).setOnClickListener { showPick() }
+        findViewById<ImageButton>(R.id.btnComparePen).setOnClickListener { setDrawMode(!drawModeOn) }
         btnGo.setOnClickListener { showCompare() }
 
+        setupDrawTool()
         reloadPick()
+    }
+
+    private fun dpF(v: Float) = v * resources.displayMetrics.density
+
+    /** Vẽ để khoanh vùng khác biệt khi đang so sánh 2 ảnh — không lưu lại, chỉ để xem/chiếu lên TV lúc này. */
+    private fun setupDrawTool() {
+        val btnEraser = findViewById<ImageButton>(R.id.btnCdEraser)
+        val penSizes = mapOf(R.id.cdSizeS to 4f, R.id.cdSizeM to 8f, R.id.cdSizeL to 16f)
+        val eraserSizes = mapOf(R.id.cdSizeS to 14f, R.id.cdSizeM to 26f, R.id.cdSizeL to 42f)
+        val sizeBtns = penSizes.keys.map { findViewById<Button>(it) }
+        var curSizeId = R.id.cdSizeM
+
+        fun applySize(id: Int) {
+            curSizeId = id
+            val w = (if (compareDrawView.eraseMode) eraserSizes[id] else penSizes[id]) ?: return
+            if (compareDrawView.eraseMode) compareDrawView.eraserWidth = dpF(w) else compareDrawView.penWidth = dpF(w)
+            sizeBtns.forEach { it.isSelected = it.id == id }
+        }
+        sizeBtns.forEach { b -> b.setOnClickListener { applySize(b.id) } }
+
+        val swatches = mapOf(
+            R.id.cdSwBlack to 0xFF111827.toInt(), R.id.cdSwRed to 0xFFE5484D.toInt(),
+            R.id.cdSwBlue to 0xFF2B5FE8.toInt(), R.id.cdSwGreen to 0xFF22B566.toInt(), R.id.cdSwYellow to 0xFFF5B400.toInt()
+        )
+        val swatchViews = swatches.keys.map { findViewById<View>(it) }
+        fun selectColor(id: Int, c: Int) {
+            compareDrawView.color = c; compareDrawView.eraseMode = false
+            swatchViews.forEach { it.isSelected = it.id == id }
+            btnEraser.isSelected = false
+            applySize(curSizeId)
+        }
+        swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { selectColor(id, c) } }
+
+        btnEraser.setOnClickListener {
+            compareDrawView.eraseMode = !compareDrawView.eraseMode
+            btnEraser.isSelected = compareDrawView.eraseMode
+            if (compareDrawView.eraseMode) swatchViews.forEach { it.isSelected = false }
+            applySize(curSizeId)
+        }
+
+        selectColor(R.id.cdSwRed, 0xFFE5484D.toInt())
+        applySize(R.id.cdSizeM)
+
+        findViewById<ImageButton>(R.id.btnCdUndo).setOnClickListener { compareDrawView.undo() }
+        findViewById<ImageButton>(R.id.btnCdRedo).setOnClickListener { compareDrawView.redo() }
+        findViewById<ImageButton>(R.id.btnCdClear).setOnClickListener { compareDrawView.clearAll() }
+        findViewById<Button>(R.id.btnCdDone).setOnClickListener { setDrawMode(false) }
+    }
+
+    private fun setDrawMode(on: Boolean) {
+        drawModeOn = on
+        compareDrawView.visibility = if (on) View.VISIBLE else View.GONE
+        compareDrawToolbar.visibility = if (on) View.VISIBLE else View.GONE
+        findViewById<ImageButton>(R.id.btnComparePen).isSelected = on
+        findViewById<ImageButton>(R.id.btnBackCompare).visibility = if (on) View.GONE else View.VISIBLE
     }
 
     override fun onResume() {
@@ -142,15 +209,24 @@ class CompareActivity : ComponentActivity() {
         val items = GalleryStore.list(this)
         val a = items.find { it.id == selectedOrder[0] } ?: return
         val b = items.find { it.id == selectedOrder[1] } ?: return
-        findViewById<ImageView>(R.id.imgLeft).setImageBitmap(GalleryStore.load(this, a))
-        findViewById<ImageView>(R.id.imgRight).setImageBitmap(GalleryStore.load(this, b))
+        val bmpA = GalleryStore.load(this, a)
+        val bmpB = GalleryStore.load(this, b)
+        if (bmpA == null || bmpB == null) {
+            Toast.makeText(this, "Không mở được ảnh", Toast.LENGTH_SHORT).show()
+            return
+        }
+        zoomLeft.setBitmap(bmpA)
+        zoomRight.setBitmap(bmpB)
         findViewById<TextView>(R.id.nameLeft).text = a.name
         findViewById<TextView>(R.id.nameRight).text = b.name
+        setDrawMode(false)
+        compareDrawView.clearAll()
         pickContainer.visibility = View.GONE
         viewContainer.visibility = View.VISIBLE
     }
 
     private fun showPick() {
+        setDrawMode(false)
         viewContainer.visibility = View.GONE
         pickContainer.visibility = View.VISIBLE
         reloadPick()

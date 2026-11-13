@@ -159,6 +159,8 @@
         android:orientation="horizontal"
         android:padding="6dp">
 
+        <ImageButton android:id="@+id/btnHome" style="@style/ToolBtn" android:rotation="180" android:src="@drawable/ic_chevron" android:contentDescription="Về màn hình chính" />
+        <View style="@style/ToolSep" />
         <ImageButton android:id="@+id/btnSettings" style="@style/ToolBtn" android:src="@drawable/ic_settings" android:contentDescription="Cài đặt" />
         <ImageButton android:id="@+id/btnSwitch" style="@style/ToolBtn" android:src="@drawable/ic_switch" android:contentDescription="Đổi camera trước sau" />
         <FrameLayout android:layout_width="wrap_content" android:layout_height="wrap_content">

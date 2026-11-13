@@ -598,7 +598,20 @@ class MainActivity : ComponentActivity() {
     private fun dp(v: Float) = v * resources.displayMetrics.density
 
     private fun setupDrawTool() {
-        liveDrawView.strokeWidth = dp(8f)
+        val btnLiveEraser = findViewById<ImageButton>(R.id.btnLiveEraser)
+        // Bút và Tẩy có cỡ riêng — tẩy mặc định to hơn hẳn cho dễ xóa
+        val penSizes = mapOf(R.id.lsizeS to 4f, R.id.lsizeM to 8f, R.id.lsizeL to 16f)
+        val eraserSizes = mapOf(R.id.lsizeS to 14f, R.id.lsizeM to 26f, R.id.lsizeL to 42f)
+        val sizeBtns = penSizes.keys.map { findViewById<Button>(it) }
+        var curSizeId = R.id.lsizeM
+
+        fun selectSize(id: Int) {
+            curSizeId = id
+            val w = (if (liveDrawView.eraseMode) eraserSizes[id] else penSizes[id]) ?: return
+            if (liveDrawView.eraseMode) liveDrawView.eraserWidth = dp(w) else liveDrawView.penWidth = dp(w)
+            sizeBtns.forEach { it.isSelected = it.id == id }
+        }
+        sizeBtns.forEach { b -> b.setOnClickListener { selectSize(b.id) } }
 
         val swatches = mapOf(
             R.id.lswBlack to 0xFF111827.toInt(), R.id.lswRed to 0xFFE5484D.toInt(),
@@ -608,24 +621,21 @@ class MainActivity : ComponentActivity() {
         fun selectColor(id: Int, c: Int) {
             liveDrawView.color = c; liveDrawView.eraseMode = false
             swatchViews.forEach { it.isSelected = it.id == id }
-            findViewById<ImageButton>(R.id.btnLiveEraser).isSelected = false
+            btnLiveEraser.isSelected = false
+            selectSize(curSizeId)
         }
         swatches.forEach { (id, c) -> findViewById<View>(id).setOnClickListener { selectColor(id, c) } }
-        selectColor(R.id.lswRed, 0xFFE5484D.toInt())
 
-        val sizes = mapOf(R.id.lsizeS to 4f, R.id.lsizeM to 8f, R.id.lsizeL to 16f)
-        val sizeBtns = sizes.keys.map { findViewById<Button>(it) }
-        fun selectSize(id: Int, w: Float) {
-            liveDrawView.strokeWidth = dp(w)
-            sizeBtns.forEach { it.isSelected = it.id == id }
-        }
-        sizes.forEach { (id, w) -> findViewById<Button>(id).setOnClickListener { selectSize(id, w) } }
-        selectSize(R.id.lsizeM, 8f)
-
-        findViewById<ImageButton>(R.id.btnLiveEraser).setOnClickListener {
+        btnLiveEraser.setOnClickListener {
             liveDrawView.eraseMode = !liveDrawView.eraseMode
-            it.isSelected = liveDrawView.eraseMode
+            btnLiveEraser.isSelected = liveDrawView.eraseMode
+            if (liveDrawView.eraseMode) swatchViews.forEach { it.isSelected = false }
+            selectSize(curSizeId)
         }
+
+        selectColor(R.id.lswRed, 0xFFE5484D.toInt())
+        selectSize(R.id.lsizeM)
+
         findViewById<ImageButton>(R.id.btnLiveUndo).setOnClickListener { liveDrawView.undo() }
         findViewById<ImageButton>(R.id.btnLiveRedo).setOnClickListener { liveDrawView.redo() }
         findViewById<ImageButton>(R.id.btnLiveClear).setOnClickListener { liveDrawView.clearAll() }
@@ -700,6 +710,7 @@ class MainActivity : ComponentActivity() {
     /* ---------------- Nút ---------------- */
 
     private fun setupButtons() {
+        findViewById<ImageButton>(R.id.btnHome).setOnClickListener { finish() }
         btnSettings.setOnClickListener { showPanel(panel.visibility != View.VISIBLE) }
         findViewById<ImageButton>(R.id.panelClose).setOnClickListener { showPanel(false) }
 
